@@ -319,9 +319,9 @@
 
                     <div class="h-4 w-px bg-slate-200 mx-0.5 hidden sm:block"></div>
 
-                    <button onclick="exportJSON()" title="Esporta dati JSON" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                    <button onclick="openExportModal()" title="Esporta una scheda o tutto" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                        <span class="hidden md:inline">JSON</span>
+                        <span class="hidden md:inline">Esporta</span>
                     </button>
 
                     <button onclick="openImportModal()" title="Importa dati JSON" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
@@ -1691,15 +1691,15 @@
 
         function openImportModal() {
             const modal = document.getElementById("custom-modal");
-            document.getElementById("modal-title").textContent = "Importa Scheda Tecnica (JSON)";
+            document.getElementById("modal-title").textContent = "Importa da file JSON";
             document.getElementById("modal-body").innerHTML = `
-                <p class="mb-3">Seleziona un file <strong>.json</strong> precedentemente esportato oppure incolla il codice JSON qui sotto:</p>
+                <p class="mb-3">Seleziona un file <strong>.json</strong> esportato da questa app (una scheda singola oppure la copia di tutto) oppure incolla il codice JSON qui sotto:</p>
                 <input type="file" id="json-file-input" accept=".json" onchange="handleJsonFileUpload(event)" class="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 mb-3">
                 <textarea id="json-paste-area" rows="5" placeholder='{"title": "...", ...}' class="w-full font-mono text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-indigo-500"></textarea>
             `;
             document.getElementById("modal-footer").innerHTML = `
                 <button onclick="closeModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
-                <button onclick="confirmJsonImport()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Importa Scheda</button>
+                <button onclick="confirmJsonImport()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Importa</button>
             `;
             modal.classList.remove("hidden");
             modal.classList.add("flex");
@@ -1723,6 +1723,10 @@
             }
             try {
                 const parsed = JSON.parse(raw);
+                if (parsed && parsed.type === "backup" && Array.isArray(parsed.recipes)) {
+                    importBackup(parsed);
+                    return;
+                }
                 if (!parsed.basePreparations || !parsed.serviceItems) {
                     throw new Error("Struttura JSON non valida");
                 }
@@ -2245,6 +2249,111 @@
             document.getElementById("sup-search").value = "";
             renderSuppliers();
             showToast(`Importazione completata: ${fresh.length} nuove, ${updated} aggiornate.`, "success");
+        }
+
+        // =========================================================================
+        // 12. ESPORTA (SINGOLA SCHEDA O TUTTO) E RIPRISTINO COMPLETO
+        // =========================================================================
+        function allRecipesForExport() {
+            // Include anche le modifiche non ancora salvate della scheda aperta
+            const list = savedRecipes.map(r => r.id === currentRecipe.id ? deepClone(currentRecipe) : deepClone(r));
+            if (!savedRecipes.some(r => r.id === currentRecipe.id)) list.unshift(deepClone(currentRecipe));
+            return list;
+        }
+
+        function openExportModal() {
+            const nRecipes = allRecipesForExport().length;
+            const nSup = supplierList.length;
+            document.getElementById("modal-title").textContent = "Esporta";
+            document.getElementById("modal-body").innerHTML = `
+                <button type="button" onclick="closeModal(); exportJSON()" class="w-full text-left p-3.5 mb-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
+                    <span class="block text-sm font-bold text-slate-900">Solo questa scheda</span>
+                    <span class="block text-xs text-slate-500 truncate">${escapeHtml(currentRecipe.title || "Senza titolo")}</span>
+                </button>
+                <button type="button" onclick="closeModal(); exportAllJSON()" class="w-full text-left p-3.5 rounded-xl border border-amber-300 bg-amber-50/60 hover:bg-amber-50 transition">
+                    <span class="block text-sm font-bold text-slate-900">Tutto insieme</span>
+                    <span class="block text-xs text-slate-600">${nRecipes} ${nRecipes === 1 ? "scheda" : "schede"} + ${nSup} ${nSup === 1 ? "prodotto" : "prodotti"} del listino fornitori</span>
+                </button>
+                <p class="mt-3 text-[11px] text-slate-400">"Tutto insieme" è una copia di sicurezza completa: la rimetti con il pulsante Importa.</p>
+            `;
+            document.getElementById("modal-footer").innerHTML = `
+                <button onclick="closeModal()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
+            `;
+            const modal = document.getElementById("custom-modal");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function exportAllJSON() {
+            const recipes = allRecipesForExport();
+            const data = {
+                app: "chefcost-da-gana",
+                type: "backup",
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                recipes,
+                suppliers: supplierList
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `backup-da-gana-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Esportate ${recipes.length} schede e ${supplierList.length} prodotti del listino.`, "success");
+        }
+
+        // Rimette un backup completo senza cancellare nulla: per le schede vince la piu' recente
+        function importBackup(b) {
+            let added = 0, updated = 0, kept = 0;
+            const touched = [];
+            b.recipes.forEach(r => {
+                if (!r || !r.id || !r.basePreparations || !r.serviceItems) return;
+                const idx = savedRecipes.findIndex(x => x.id === r.id);
+                if (idx >= 0) {
+                    if ((r.updatedAt || 0) >= (savedRecipes[idx].updatedAt || 0)) {
+                        savedRecipes[idx] = deepClone(r); updated++; touched.push(savedRecipes[idx]);
+                    } else { kept++; }
+                } else {
+                    savedRecipes.push(deepClone(r)); added++; touched.push(savedRecipes[savedRecipes.length - 1]);
+                }
+            });
+
+            let sAdd = 0, sUpd = 0;
+            if (Array.isArray(b.suppliers)) {
+                const idx = new Map(supplierList.map(i => [supplierKey(i), i]));
+                b.suppliers.forEach((it, n) => {
+                    if (!it || !String(it.product || "").trim()) return;
+                    const clean = {
+                        supplier: String(it.supplier || ""),
+                        product: String(it.product || ""),
+                        price: Number(it.price) || 0,
+                        unit: SUP_UNITS[it.unit] ? it.unit : "kg",
+                        vat: [4, 10, 22].includes(Number(it.vat)) ? Number(it.vat) : 10
+                    };
+                    const ex = idx.get(supplierKey(clean));
+                    if (ex) { Object.assign(ex, clean); sUpd++; }
+                    else {
+                        const o = { id: `${generateId("sup")}-${n}`, ...clean };
+                        supplierList.push(o); idx.set(supplierKey(clean), o); sAdd++;
+                    }
+                });
+                persistSuppliers();
+            }
+
+            persistRecipesToStorage();
+            const cur = savedRecipes.find(x => x.id === currentRecipe.id);
+            if (cur && touched.includes(cur)) currentRecipe = deepClone(cur);
+            populateSavedSelect();
+            renderAll();
+            closeModal();
+            if (sbUser && touched.length) pushRecipesToCloud(touched.map(deepClone));
+
+            let msg = `Backup importato: ${added} schede nuove, ${updated} aggiornate`;
+            if (kept) msg += `, ${kept} già più recenti qui`;
+            msg += `. Listino: ${sAdd} nuovi, ${sUpd} aggiornati.`;
+            showToast(msg, "success");
         }
 
         // Avvio all'apertura della pagina
