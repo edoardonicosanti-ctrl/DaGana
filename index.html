@@ -103,7 +103,8 @@
 
         /* ---- Tablet e telefono: barra compatta, tab in basso, menu a tendina ---- */
         @media screen and (max-width: 1023px) {
-            header { position: static !important; box-shadow: none; }
+            /* z-index auto: altrimenti l'header (elemento flex) crea un livello che intrappola il menu sotto lo sfondo scuro */
+            header { position: static !important; z-index: auto !important; box-shadow: none; }
 
             /* Barra superiore compatta (sempre visibile) */
             #mobile-bar { display: flex; }
