@@ -1904,11 +1904,11 @@
             tbody.innerHTML = items.map(it => `
                 <tr class="hover:bg-slate-50/80 transition" data-sid="${it.id}">
                     <td class="c-sfor py-2 px-3">
-                        <input type="text" list="sup-names" value="${escapeHtml(it.supplier || "")}" placeholder="Fornitore (es. Barilla)"
+                        <input type="text" list="sup-names" value="${escapeHtml(it.supplier || "")}" placeholder="Fornitore ()"
                             oninput="updateSupplierItem('${it.id}', 'supplier', this.value)" class="${inputCls} font-semibold">
                     </td>
                     <td class="c-sprod py-2 px-2">
-                        <input type="text" value="${escapeHtml(it.product || "")}" placeholder="Prodotto (es. Spaghetti n.5)"
+                        <input type="text" value="${escapeHtml(it.product || "")}" placeholder="Prodotto ()"
                             oninput="updateSupplierItem('${it.id}', 'product', this.value)" class="${inputCls}">
                     </td>
                     <td class="c-sprz py-2 px-2" data-label="Prezzo €">
