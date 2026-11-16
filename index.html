@@ -143,7 +143,7 @@
 
             /* Navigazione a tab in basso (pollice) */
             #bottom-nav {
-                display: grid; grid-template-columns: repeat(3, 1fr);
+                display: grid; grid-template-columns: repeat(4, 1fr);
                 position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
                 background: #fff; border-top: 1px solid #e2e8f0;
                 padding-bottom: env(safe-area-inset-bottom);
@@ -165,6 +165,7 @@
 
             body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
             body.kb-open { padding-bottom: 16px; }
+            body.sup-open { overflow: hidden; }
             body.kb-open #bottom-nav { display: none; }
 
             #toast-container { bottom: calc(76px + env(safe-area-inset-bottom)) !important; left: 12px; right: 12px; align-items: stretch; }
@@ -218,6 +219,16 @@
             .rt-srv tfoot .f-label  { grid-column: 1 / -1; grid-row: 1; }
             .rt-srv tfoot .f-w      { grid-column: 1 / 3; grid-row: 2; }
             .rt-srv tfoot .f-c      { grid-column: 3; grid-row: 2; }
+
+            /* Listino fornitori */
+            .rt-sup tbody .c-sfor  { grid-column: 1 / -1; grid-row: 1; padding-right: 44px !important; }
+            .rt-sup tbody .c-sprod { grid-column: 1 / -1; grid-row: 2; }
+            .rt-sup tbody .c-sprz  { grid-column: 1; grid-row: 3; }
+            .rt-sup tbody .c-sun   { grid-column: 2; grid-row: 3; }
+            .rt-sup tbody .c-siva  { grid-column: 3; grid-row: 3; }
+            .rt-sup tbody .c-stot  { grid-column: 1 / -1; grid-row: 4; font-size: 14px !important; text-align: right !important; }
+            .rt-sup tbody .c-stot::before { text-align: right; }
+            input[type=search] { min-height: 44px; }
 
             /* Elementi toccabili piu' comodi */
             #allergens-grid button { padding: 8px 14px; font-size: 13px; }
@@ -299,6 +310,11 @@
                     <button onclick="saveCurrentRecipe()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-xs">
                         <i data-lucide="save" class="w-3.5 h-3.5 text-amber-400"></i>
                         <span>Salva Scheda</span>
+                    </button>
+
+                    <button type="button" onclick="openSuppliers()" title="Listino fornitori e prezzi ingredienti" class="sheet-wide inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition">
+                        <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+                        <span>Fornitori</span>
                     </button>
 
                     <div class="h-4 w-px bg-slate-200 mx-0.5 hidden sm:block"></div>
@@ -551,6 +567,56 @@
         </div>
     </footer>
 
+    <!-- LISTINO FORNITORI (schermata a tutto schermo) -->
+    <div id="supplier-view" class="no-print fixed inset-0 z-[45] bg-slate-50 hidden flex-col" role="dialog" aria-label="Listino fornitori">
+        <div class="bg-white border-b border-slate-200 px-3 sm:px-6" style="padding-top: env(safe-area-inset-top);">
+            <div class="max-w-5xl mx-auto flex items-center gap-2 min-h-[58px]">
+                <button type="button" onclick="closeSuppliers()" aria-label="Torna alle schede" class="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </button>
+                <div class="min-w-0 flex-1">
+                    <div class="text-base font-bold text-slate-900 truncate">Listino fornitori</div>
+                    <div id="sup-count" class="text-[11px] text-slate-500">0 prodotti</div>
+                </div>
+                <button type="button" onclick="exportSuppliersCSV()" title="Esporta in CSV (Excel)" aria-label="Esporta in CSV" class="shrink-0 h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">CSV</span>
+                </button>
+                <button type="button" onclick="addSupplierItem()" class="shrink-0 h-11 px-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-950 bg-amber-500 rounded-xl hover:bg-amber-400">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Aggiungi</span>
+                </button>
+            </div>
+            <div class="max-w-5xl mx-auto pb-3">
+                <input type="search" id="sup-search" oninput="renderSuppliers()" placeholder="Cerca fornitore o prodotto..." autocomplete="off"
+                    class="w-full text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:bg-white focus:border-amber-500 focus:outline-none">
+            </div>
+        </div>
+
+        <div id="sup-scroll" class="flex-1 overflow-y-auto" style="padding-bottom: calc(24px + env(safe-area-inset-bottom));">
+            <div class="max-w-5xl mx-auto px-3 sm:px-6 py-4">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                    <table class="rt rt-sup w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                <th class="py-2.5 px-3">Fornitore</th>
+                                <th class="py-2.5 px-2">Prodotto</th>
+                                <th class="py-2.5 px-2 text-right w-28">Prezzo (€)</th>
+                                <th class="py-2.5 px-2 w-24">Per</th>
+                                <th class="py-2.5 px-2 w-24">IVA</th>
+                                <th class="py-2.5 px-2 text-right w-32">Con IVA</th>
+                                <th class="py-2.5 px-2 w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sup-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-3 px-1">I prezzi vanno inseriti senza IVA. Il listino resta salvato su questo dispositivo: usa l'icona di download per tenerne una copia.</p>
+            </div>
+        </div>
+        <datalist id="sup-names"></datalist>
+    </div>
+
     <!-- Navigazione a tab in basso (solo telefono/tablet) -->
     <nav id="bottom-nav" class="no-print" aria-label="Sezioni">
         <button type="button" id="tab-prep" onclick="switchTab('prep')" class="nav-item">
@@ -560,6 +626,10 @@
         <button type="button" id="tab-service" onclick="switchTab('service')" class="nav-item">
             <span class="nav-ico"><i data-lucide="utensils" class="w-5 h-5"></i></span>
             <span>Servizio</span>
+        </button>
+        <button type="button" id="tab-suppliers" onclick="openSuppliers()" class="nav-item">
+            <span class="nav-ico"><i data-lucide="truck" class="w-5 h-5"></i></span>
+            <span>Fornitori</span>
         </button>
         <button type="button" id="tab-save" onclick="saveCurrentRecipe()" class="nav-item nav-save">
             <span class="nav-ico"><i data-lucide="save" class="w-5 h-5 text-amber-400"></i></span>
@@ -1760,6 +1830,200 @@
                 setTimeout(() => {
                     if (!isField(document.activeElement)) document.body.classList.remove("kb-open");
                 }, 80);
+            });
+        });
+
+        // =========================================================================
+        // 10. LISTINO FORNITORI E PREZZI INGREDIENTI
+        // =========================================================================
+        const SUPPLIERS_KEY = "chefcost_pro_suppliers_v1";
+        const SUP_UNITS = { kg: "kg", l: "l", pz: "pz", conf: "conf." };
+        let supplierList = [];
+
+        function loadSuppliers() {
+            try {
+                const raw = localStorage.getItem(SUPPLIERS_KEY);
+                const parsed = raw ? JSON.parse(raw) : [];
+                supplierList = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                console.error("Errore lettura listino:", e);
+                supplierList = [];
+            }
+        }
+
+        function persistSuppliers() {
+            try {
+                localStorage.setItem(SUPPLIERS_KEY, JSON.stringify(supplierList));
+            } catch (e) {
+                showToast("Impossibile salvare il listino nel browser (memoria piena o bloccata).", "error");
+            }
+        }
+
+        function supplierPriceWithVat(it) {
+            return (Number(it.price) || 0) * (1 + (Number(it.vat) || 0) / 100);
+        }
+
+        function supplierTotalText(it) {
+            return `${formatCurrency(supplierPriceWithVat(it))} / ${SUP_UNITS[it.unit] || it.unit}`;
+        }
+
+        function updateSupplierCount() {
+            const names = new Set(supplierList.map(i => (i.supplier || "").trim().toLowerCase()).filter(Boolean));
+            const n = supplierList.length;
+            const f = names.size;
+            document.getElementById("sup-count").textContent =
+                `${n} ${n === 1 ? "prodotto" : "prodotti"} · ${f} ${f === 1 ? "fornitore" : "fornitori"}`;
+        }
+
+        function renderSuppliers() {
+            const tbody = document.getElementById("sup-tbody");
+            const q = (document.getElementById("sup-search").value || "").trim().toLowerCase();
+            const items = supplierList.filter(it =>
+                !q || ((it.supplier || "") + " " + (it.product || "")).toLowerCase().includes(q)
+            );
+
+            // Suggerimenti per i nomi dei fornitori gia' inseriti
+            const names = [...new Set(supplierList.map(i => (i.supplier || "").trim()).filter(Boolean))].sort();
+            document.getElementById("sup-names").innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join("");
+
+            updateSupplierCount();
+
+            if (items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="c-empty py-10 px-4 text-center text-sm text-slate-400">
+                            ${supplierList.length === 0
+                                ? "Il listino è vuoto. Tocca <strong class='text-slate-600'>Aggiungi</strong> per inserire il primo prodotto, ad esempio Barilla · Spaghetti n.5 · € 1,80 al kg."
+                                : "Nessun risultato per questa ricerca."}
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            const inputCls = "w-full text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-amber-500 focus:outline-none";
+            tbody.innerHTML = items.map(it => `
+                <tr class="hover:bg-slate-50/80 transition" data-sid="${it.id}">
+                    <td class="c-sfor py-2 px-3">
+                        <input type="text" list="sup-names" value="${escapeHtml(it.supplier || "")}" placeholder="Fornitore (es. Barilla)"
+                            oninput="updateSupplierItem('${it.id}', 'supplier', this.value)" class="${inputCls} font-semibold">
+                    </td>
+                    <td class="c-sprod py-2 px-2">
+                        <input type="text" value="${escapeHtml(it.product || "")}" placeholder="Prodotto (es. Spaghetti n.5)"
+                            oninput="updateSupplierItem('${it.id}', 'product', this.value)" class="${inputCls}">
+                    </td>
+                    <td class="c-sprz py-2 px-2" data-label="Prezzo €">
+                        <input type="number" inputmode="decimal" min="0" step="0.01" value="${it.price}"
+                            oninput="updateSupplierItem('${it.id}', 'price', parseFloat(this.value) || 0)" class="${inputCls} text-right font-num font-bold">
+                    </td>
+                    <td class="c-sun py-2 px-2" data-label="Per">
+                        <select onchange="updateSupplierItem('${it.id}', 'unit', this.value)" class="${inputCls}">
+                            ${Object.entries(SUP_UNITS).map(([v, l]) => `<option value="${v}" ${it.unit === v ? "selected" : ""}>€ / ${l}</option>`).join("")}
+                        </select>
+                    </td>
+                    <td class="c-siva py-2 px-2" data-label="IVA">
+                        <select onchange="updateSupplierItem('${it.id}', 'vat', parseFloat(this.value) || 0)" class="${inputCls}">
+                            ${[4, 10, 22].map(v => `<option value="${v}" ${Number(it.vat) === v ? "selected" : ""}>${v}%</option>`).join("")}
+                        </select>
+                    </td>
+                    <td class="c-stot py-2 px-2 text-right font-num text-sm font-semibold text-slate-700" data-label="Prezzo con IVA" id="sup-tot-${it.id}">
+                        ${supplierTotalText(it)}
+                    </td>
+                    <td class="c-del py-2 px-2 text-center">
+                        <button type="button" onclick="removeSupplierItem('${it.id}')" title="Elimina voce" aria-label="Elimina voce" class="p-2 text-slate-300 hover:text-rose-600 rounded transition cursor-pointer">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join("");
+            lucide.createIcons();
+        }
+
+        function updateSupplierItem(id, field, value) {
+            const it = supplierList.find(x => x.id === id);
+            if (!it) return;
+            it[field] = value;
+            persistSuppliers();
+            const totEl = document.getElementById(`sup-tot-${id}`);
+            if (totEl) totEl.textContent = supplierTotalText(it);
+            if (field === "supplier") updateSupplierCount();
+        }
+
+        function addSupplierItem() {
+            const it = { id: generateId("sup"), supplier: "", product: "", price: 0, unit: "kg", vat: 10 };
+            supplierList.unshift(it);
+            persistSuppliers();
+            document.getElementById("sup-search").value = "";
+            renderSuppliers();
+            document.getElementById("sup-scroll").scrollTop = 0;
+            const first = document.querySelector(`[data-sid="${it.id}"] input`);
+            if (first) first.focus();
+        }
+
+        function removeSupplierItem(id) {
+            const it = supplierList.find(x => x.id === id);
+            if (!it) return;
+            const label = it.product ? `<strong>${escapeHtml(it.product)}</strong>` : "questa voce";
+            const from = it.supplier ? ` di <strong>${escapeHtml(it.supplier)}</strong>` : "";
+            document.getElementById("modal-title").textContent = "Elimina dal listino";
+            document.getElementById("modal-body").innerHTML = `<p>Vuoi eliminare ${label}${from}?</p>`;
+            document.getElementById("modal-footer").innerHTML = `
+                <button onclick="closeModal()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
+                <button onclick="confirmRemoveSupplier('${id}')" class="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg">Elimina</button>
+            `;
+            const modal = document.getElementById("custom-modal");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function confirmRemoveSupplier(id) {
+            supplierList = supplierList.filter(x => x.id !== id);
+            persistSuppliers();
+            closeModal();
+            renderSuppliers();
+        }
+
+        function exportSuppliersCSV() {
+            if (supplierList.length === 0) {
+                showToast("Il listino è vuoto: niente da esportare.", "warning");
+                return;
+            }
+            const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+            const num = (v) => String(Math.round((Number(v) || 0) * 100) / 100).replace(".", ",");
+            const rows = [["Fornitore", "Prodotto", "Prezzo (IVA esclusa)", "Unità", "IVA %", "Prezzo con IVA"]]
+                .concat(supplierList.map(it => [it.supplier, it.product, num(it.price), SUP_UNITS[it.unit] || it.unit, it.vat, num(supplierPriceWithVat(it))]));
+            const csv = "\uFEFF" + rows.map(r => r.map(esc).join(";")).join("\r\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "listino-fornitori.csv";
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Listino esportato in CSV.", "success");
+        }
+
+        function openSuppliers() {
+            closeMenu();
+            renderSuppliers();
+            const view = document.getElementById("supplier-view");
+            view.classList.remove("hidden");
+            view.classList.add("flex");
+            document.body.classList.add("sup-open");
+            document.getElementById("sup-scroll").scrollTop = 0;
+            lucide.createIcons();
+        }
+
+        function closeSuppliers() {
+            const view = document.getElementById("supplier-view");
+            view.classList.add("hidden");
+            view.classList.remove("flex");
+            document.body.classList.remove("sup-open");
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            loadSuppliers();
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && document.body.classList.contains("sup-open")) closeSuppliers();
             });
         });
 
