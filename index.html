@@ -575,14 +575,18 @@
                     <i data-lucide="arrow-left" class="w-5 h-5"></i>
                 </button>
                 <div class="min-w-0 flex-1">
-                    <div class="text-base font-bold text-slate-900 truncate">Listino fornitori</div>
+                    <div class="text-base font-bold text-slate-900 truncate">Fornitori</div>
                     <div id="sup-count" class="text-[11px] text-slate-500">0 prodotti</div>
                 </div>
-                <button type="button" onclick="exportSuppliersCSV()" title="Esporta in CSV (Excel)" aria-label="Esporta in CSV" class="shrink-0 h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200">
+                <button type="button" onclick="openSupplierImport()" title="Importa da CSV o Excel" aria-label="Importa listino" class="shrink-0 h-11 w-11 sm:w-auto sm:px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Importa</span>
+                </button>
+                <button type="button" onclick="exportSuppliersCSV()" title="Esporta in CSV (Excel)" aria-label="Esporta in CSV" class="shrink-0 h-11 w-11 sm:w-auto sm:px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200">
                     <i data-lucide="download" class="w-4 h-4"></i>
                     <span class="hidden sm:inline">CSV</span>
                 </button>
-                <button type="button" onclick="addSupplierItem()" class="shrink-0 h-11 px-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-950 bg-amber-500 rounded-xl hover:bg-amber-400">
+                <button type="button" onclick="addSupplierItem()" class="shrink-0 h-11 px-3 sm:px-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-950 bg-amber-500 rounded-xl hover:bg-amber-400">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Aggiungi</span>
                 </button>
@@ -1893,7 +1897,7 @@
                     <tr>
                         <td colspan="7" class="c-empty py-10 px-4 text-center text-sm text-slate-400">
                             ${supplierList.length === 0
-                                ? "Il listino è vuoto. Tocca <strong class='text-slate-600'>Aggiungi</strong> per inserire il primo prodotto, ad esempio  ·  · € 1,80 al kg."
+                                ? "Il listino è vuoto. Tocca <strong class='text-slate-600'>Aggiungi</strong> per inserire il primo prodotto, ad esempio Barilla · Spaghetti n.5 · € 1,80 al kg."
                                 : "Nessun risultato per questa ricerca."}
                         </td>
                     </tr>`;
@@ -1904,11 +1908,11 @@
             tbody.innerHTML = items.map(it => `
                 <tr class="hover:bg-slate-50/80 transition" data-sid="${it.id}">
                     <td class="c-sfor py-2 px-3">
-                        <input type="text" list="sup-names" value="${escapeHtml(it.supplier || "")}" placeholder="Fornitore ()"
+                        <input type="text" list="sup-names" value="${escapeHtml(it.supplier || "")}" placeholder="Fornitore (es. Barilla)"
                             oninput="updateSupplierItem('${it.id}', 'supplier', this.value)" class="${inputCls} font-semibold">
                     </td>
                     <td class="c-sprod py-2 px-2">
-                        <input type="text" value="${escapeHtml(it.product || "")}" placeholder="Prodotto ()"
+                        <input type="text" value="${escapeHtml(it.product || "")}" placeholder="Prodotto (es. Spaghetti n.5)"
                             oninput="updateSupplierItem('${it.id}', 'product', this.value)" class="${inputCls}">
                     </td>
                     <td class="c-sprz py-2 px-2" data-label="Prezzo €">
@@ -2026,6 +2030,222 @@
                 if (e.key === "Escape" && document.body.classList.contains("sup-open")) closeSuppliers();
             });
         });
+
+        // =========================================================================
+        // 11. IMPORTAZIONE LISTINO (CSV / EXCEL / INCOLLA)
+        // =========================================================================
+        let sheetJsPromise = null;
+        function loadSheetJS() {
+            if (typeof XLSX !== "undefined") return Promise.resolve();
+            if (!sheetJsPromise) {
+                sheetJsPromise = new Promise((resolve, reject) => {
+                    const sc = document.createElement("script");
+                    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+                    sc.onload = resolve;
+                    sc.onerror = () => { sheetJsPromise = null; reject(new Error("xlsx non caricato")); };
+                    document.head.appendChild(sc);
+                });
+            }
+            return sheetJsPromise;
+        }
+
+        // Legge testo separato da tab, ; oppure , (con supporto ai campi tra virgolette)
+        function parseDelimited(text) {
+            text = text.replace(/^\uFEFF/, "");
+            const firstLine = text.split(/\r?\n/).find(l => l.trim()) || "";
+            const delim = firstLine.includes("\t") ? "\t" : (firstLine.includes(";") ? ";" : ",");
+            const rows = [];
+            let row = [], cur = "", inQ = false;
+            const pushRow = () => {
+                row.push(cur); cur = "";
+                if (row.some(x => x.trim() !== "")) rows.push(row);
+                row = [];
+            };
+            for (let i = 0; i < text.length; i++) {
+                const c = text[i];
+                if (inQ) {
+                    if (c === '"') {
+                        if (text[i + 1] === '"') { cur += '"'; i++; } else { inQ = false; }
+                    } else { cur += c; }
+                } else if (c === '"') { inQ = true; }
+                else if (c === delim) { row.push(cur); cur = ""; }
+                else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; pushRow(); }
+                else { cur += c; }
+            }
+            pushRow();
+            return rows;
+        }
+
+        // Accetta "1,80", "1.80", "€ 1.234,50", "5 €"
+        function parsePriceValue(v) {
+            if (typeof v === "number") return isFinite(v) ? v : NaN;
+            let t = String(v ?? "").replace(/eur/gi, "").replace(/[^0-9.,\-]/g, "");
+            if (!t) return NaN;
+            const hasComma = t.includes(","), hasDot = t.includes(".");
+            if (hasComma && hasDot) {
+                t = t.lastIndexOf(",") > t.lastIndexOf(".") ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+            } else if (hasComma) {
+                t = t.replace(",", ".");
+            }
+            const n = parseFloat(t);
+            return isFinite(n) ? n : NaN;
+        }
+
+        function parseUnitValue(v) {
+            const t = String(v ?? "").toLowerCase().replace(/[^a-z]/g, "");
+            if (/^(l|lt|ltr|litro|litri)$/.test(t)) return "l";
+            if (/^(pz|pezzo|pezzi|nr|n|cad|cadauno)$/.test(t)) return "pz";
+            if (/^(conf|confezione|confezioni|cf)$/.test(t)) return "conf";
+            return "kg";
+        }
+
+        // Riconosce le colonne dall'intestazione (se c'e')
+        function detectSupplierColumns(row) {
+            const norm = (h) => String(h ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9% ]/g, " ").replace(/\s+/g, " ").trim();
+            const map = {};
+            row.forEach((h, i) => {
+                const n = norm(h);
+                if (map.supplier === undefined && /^(fornitore|supplier|produttore|marca)/.test(n)) map.supplier = i;
+                else if (map.product === undefined && /^(prodotto|ingrediente|articolo|descrizione|nome|voce)/.test(n)) map.product = i;
+                else if (map.price === undefined && /^(prezzo|costo|price|importo)/.test(n) && !/(con iva|ivato|iva incl|lordo|totale)/.test(n)) map.price = i;
+                else if (map.unit === undefined && /^(unita|um|u m|per|misura)/.test(n)) map.unit = i;
+                else if (map.vat === undefined && /^iva/.test(n)) map.vat = i;
+            });
+            return (map.price !== undefined && (map.product !== undefined || map.supplier !== undefined)) ? map : null;
+        }
+
+        function parseSupplierImport(text, vatIncluded) {
+            const res = { items: [], skipped: 0, nonStdVat: 0 };
+            if (!text || !text.trim()) return res;
+            const rows = parseDelimited(text);
+            if (!rows.length) return res;
+            let map = detectSupplierColumns(rows[0]);
+            let start = 0;
+            if (map) { start = 1; } else { map = { supplier: 0, product: 1, price: 2, unit: 3, vat: 4 }; }
+            for (let r = start; r < rows.length; r++) {
+                const row = rows[r];
+                const get = (k) => map[k] === undefined ? "" : row[map[k]];
+                const product = String(get("product") ?? "").trim();
+                const price = parsePriceValue(get("price"));
+                if (!product || isNaN(price) || price < 0) { res.skipped++; continue; }
+                let vat = 10;
+                const rawVat = String(get("vat") ?? "").trim();
+                if (rawVat !== "") {
+                    const n = parsePriceValue(rawVat);
+                    if ([4, 10, 22].includes(n)) vat = n; else res.nonStdVat++;
+                }
+                const net = vatIncluded ? price / (1 + vat / 100) : price;
+                res.items.push({
+                    supplier: String(get("supplier") ?? "").trim(),
+                    product,
+                    price: Math.round(net * 10000) / 10000,
+                    unit: parseUnitValue(get("unit")),
+                    vat
+                });
+            }
+            return res;
+        }
+
+        const supplierKey = (i) => `${(i.supplier || "").trim().toLowerCase()}|${(i.product || "").trim().toLowerCase()}`;
+
+        function previewSupplierImport() {
+            const el = document.getElementById("sup-import-preview");
+            const text = document.getElementById("sup-paste-area").value;
+            if (!text.trim()) { el.textContent = ""; return; }
+            const res = parseSupplierImport(text, document.getElementById("sup-vat-incl").checked);
+            if (!res.items.length) {
+                el.className = "mt-3 text-xs font-semibold text-rose-600";
+                el.textContent = "Nessuna riga valida: servono almeno prodotto e prezzo.";
+                return;
+            }
+            const seen = new Set(supplierList.map(supplierKey));
+            let added = 0, updated = 0;
+            res.items.forEach(it => { const k = supplierKey(it); if (seen.has(k)) updated++; else { added++; seen.add(k); } });
+            let msg = `Trovate ${res.items.length} voci: ${added} nuove, ${updated} da aggiornare.`;
+            if (res.skipped) msg += ` ${res.skipped} righe saltate.`;
+            if (res.nonStdVat) msg += ` ${res.nonStdVat} con IVA diversa da 4/10/22%: impostata al 10%.`;
+            el.className = "mt-3 text-xs font-semibold text-emerald-700";
+            el.textContent = msg;
+        }
+
+        function openSupplierImport() {
+            document.getElementById("modal-title").textContent = "Importa listino fornitori";
+            document.getElementById("modal-body").innerHTML = `
+                <p class="mb-3">Carica un file <strong>CSV</strong> o <strong>Excel</strong> (.xlsx), oppure incolla le righe copiate da Excel. Colonne: <strong>Fornitore, Prodotto, Prezzo, Unità, IVA</strong> (l'intestazione è facoltativa).</p>
+                <input type="file" id="sup-file-input" accept=".csv,.txt,.tsv,.xlsx,.xls" onchange="handleSupplierFile(event)" class="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 mb-3">
+                <textarea id="sup-paste-area" rows="6" oninput="previewSupplierImport()" placeholder="Barilla;Spaghetti n.5;1,80;kg;10" class="w-full font-mono text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-amber-500"></textarea>
+                <label class="flex items-center gap-2 mt-3 text-xs text-slate-700 cursor-pointer select-none">
+                    <input type="checkbox" id="sup-vat-incl" onchange="previewSupplierImport()" class="rounded text-amber-600 focus:ring-amber-500">
+                    <span>I prezzi nel file includono già l'IVA</span>
+                </label>
+                <p id="sup-import-preview" class="mt-3 text-xs text-slate-500"></p>
+                <p class="mt-2 text-[11px] text-slate-400">Le voci con stesso fornitore e prodotto vengono aggiornate, le altre vengono aggiunte. Non viene cancellato nulla.</p>
+            `;
+            document.getElementById("modal-footer").innerHTML = `
+                <button onclick="closeModal()" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
+                <button onclick="confirmSupplierImport()" class="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Importa nel listino</button>
+            `;
+            const modal = document.getElementById("custom-modal");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function handleSupplierFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const area = document.getElementById("sup-paste-area");
+            if (/\.(xlsx|xls)$/i.test(file.name)) {
+                loadSheetJS()
+                    .then(() => file.arrayBuffer())
+                    .then(buf => {
+                        const wb = XLSX.read(buf, { type: "array" });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        area.value = XLSX.utils.sheet_to_csv(ws, { FS: "\t", rawNumbers: true, blankrows: false });
+                        previewSupplierImport();
+                    })
+                    .catch(() => showToast("Non riesco a leggere il file Excel. Salvalo come CSV e riprova.", "error"));
+            } else {
+                file.arrayBuffer().then(buf => {
+                    let t;
+                    try { t = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+                    catch (e) { t = new TextDecoder("windows-1252").decode(buf); }
+                    area.value = t;
+                    previewSupplierImport();
+                });
+            }
+        }
+
+        function confirmSupplierImport() {
+            const res = parseSupplierImport(
+                document.getElementById("sup-paste-area").value,
+                document.getElementById("sup-vat-incl").checked
+            );
+            if (!res.items.length) {
+                showToast("Nessuna riga valida: servono almeno Prodotto e Prezzo.", "error");
+                return;
+            }
+            const idx = new Map(supplierList.map(i => [supplierKey(i), i]));
+            const fresh = [];
+            let updated = 0;
+            res.items.forEach((it, n) => {
+                const ex = idx.get(supplierKey(it));
+                if (ex) {
+                    ex.price = it.price; ex.unit = it.unit; ex.vat = it.vat;
+                    updated++;
+                } else {
+                    const obj = { id: `${generateId("sup")}-${n}`, ...it };
+                    fresh.push(obj);
+                    idx.set(supplierKey(it), obj);
+                }
+            });
+            supplierList = fresh.concat(supplierList);
+            persistSuppliers();
+            closeModal();
+            document.getElementById("sup-search").value = "";
+            renderSuppliers();
+            showToast(`Importazione completata: ${fresh.length} nuove, ${updated} aggiornate.`, "success");
+        }
 
         // Avvio all'apertura della pagina
         window.addEventListener("DOMContentLoaded", initApp);
