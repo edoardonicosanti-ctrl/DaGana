@@ -1,0 +1,24 @@
+{
+  "name": "ChefCost Da Gana",
+  "short_name": "Da Gana",
+  "description": "Schede Tecniche & Food Cost",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#9c7c65",
+  "theme_color": "#9c7c65",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
