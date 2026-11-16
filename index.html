@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChefCost Da Gana — Scheda Tecnica & Food Cost</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#172033',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Stili personalizzati e regole di stampa */
+        body {
+            background-color: #f4f6f9;
+            color: #1e293b;
+        }
+        .font-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+        /* Nasconde frecce input number per pulizia visiva */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* Stili specifici per stampa PDF */
+        @media print {
+            body {
+                background-color: #ffffff !important;
+                font-size: 11px !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .print-grid {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 1rem !important;
+            }
+            .card-shadow {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                break-inside: avoid;
+            }
+            input, textarea, select {
+                border: none !important;
+                background: transparent !important;
+                padding: 0 !important;
+                resize: none !important;
+            }
+            header {
+                position: static !important;
+                border-bottom: 2px solid #0f172a !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Toast Notification Container (No alert()) -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
+
+    <!-- Modal Conferma / Import JSON -->
+    <div id="custom-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="modal-title" class="text-lg font-bold text-slate-800">Titolo</h3>
+                <button onclick="closeModal()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="modal-body" class="text-sm text-slate-600 mb-6"></div>
+            <div id="modal-footer" class="flex justify-end gap-2"></div>
+        </div>
+    </div>
+
+    <!-- BARRA SUPERIORE / HEADER STICKY -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3">
+            <!-- Riga 1: Brand, Gestione File, Azioni -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 no-print">
+                <div class="flex items-center gap-2.5">
+                    <div class="bg-slate-900 text-white p-2 rounded-lg">
+                        <i data-lucide="chef-hat" class="w-5 h-5 text-amber-400"></i>
+                    </div>
+                    <div>
+                        <span class="font-extrabold text-slate-900 tracking-tight text-base">ChefCost <span class="text-amber-600">Da Gana</span></span>
+                        <span class="hidden sm:inline-block text-xs text-slate-400 ml-2 border-l border-slate-200 pl-2">Schede Tecniche & Food Cost</span>
+                    </div>
+                </div>
+
+                <!-- Controlli Archivio & Esportazione -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+                        <i data-lucide="folder-open" class="w-4 h-4 text-slate-500 ml-2 mr-1.5"></i>
+                        <select id="saved-recipes-select" onchange="loadSelectedRecipe()" class="bg-transparent text-xs font-medium text-slate-700 pr-2 py-1 focus:outline-none max-w-[180px] sm:max-w-[230px]">
+                            <!-- Popolato via JS -->
+                        </select>
+                    </div>
+
+                    <button onclick="createNewRecipe()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+                        <i data-lucide="file-plus" class="w-3.5 h-3.5 text-slate-500"></i>
+                        <span>Nuova</span>
+                    </button>
+
+                    <button onclick="saveCurrentRecipe()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-xs">
+                        <i data-lucide="save" class="w-3.5 h-3.5 text-amber-400"></i>
+                        <span>Salva Scheda</span>
+                    </button>
+
+                    <div class="h-4 w-px bg-slate-200 mx-0.5 hidden sm:block"></div>
+
+                    <button onclick="exportJSON()" title="Esporta dati JSON" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span class="hidden md:inline">JSON</span>
+                    </button>
+
+                    <button onclick="openImportModal()" title="Importa dati JSON" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                        <span class="hidden md:inline">Importa</span>
+                    </button>
+
+                    <button onclick="downloadStandaloneHTML()" title="Scarica questa applicazione HTML sul tuo PC" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">
+                        <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+                        <span class="hidden lg:inline">Scarica App HTML</span>
+                    </button>
+
+                    <button onclick="window.print()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition">
+                        <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                        <span>Stampa PDF</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Riga 2: Dati Identificativi Piatto & KPI Food Cost in Tempo Reale -->
+            <div class="pt-3 grid grid-cols-1 xl:grid-cols-12 gap-4 items-center">
+                <!-- Nome Piatto, Categoria, Porzioni, Prezzo, IVA -->
+                <div class="xl:col-span-7 grid grid-cols-2 sm:grid-cols-12 gap-2.5">
+                    <div class="col-span-2 sm:col-span-5">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Nome Piatto / Ricetta</label>
+                        <input type="text" id="dish-title" oninput="updateMeta('title', this.value)" placeholder="Es. Tagliatelle al Ragù" class="w-full text-sm sm:text-base font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                    <div class="col-span-1 sm:col-span-3">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Categoria</label>
+                        <select id="dish-category" onchange="updateMeta('category', this.value)" class="w-full text-xs sm:text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 focus:bg-white focus:border-amber-500 focus:outline-none">
+                            <option value="Antipasti">Antipasti</option>
+                            <option value="Primi Piatti" selected>Primi Piatti</option>
+                            <option value="Secondi Piatti">Secondi Piatti</option>
+                            <option value="Contorni">Contorni</option>
+                            <option value="Dessert">Dessert</option>
+                            <option value="Piatto Unico">Piatto Unico</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1 sm:col-span-1">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5" title="Numero porzioni calcolate nella colonna Servizio">Porz.</label>
+                        <input type="number" id="dish-portions" min="1" step="1" oninput="updateMeta('portions', parseFloat(this.value) || 1)" class="w-full text-xs sm:text-sm font-num font-semibold text-center text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-1.5 focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Prezzo Vendita (€)</label>
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                            <input type="number" id="dish-price" min="0" step="0.10" oninput="updateMeta('sellingPrice', parseFloat(this.value) || 0)" class="w-full text-xs sm:text-sm font-num font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="col-span-1 sm:col-span-1">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">IVA %</label>
+                        <select id="dish-vat" onchange="updateMeta('vatRate', parseFloat(this.value) || 0)" class="w-full text-xs sm:text-sm font-num font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-1 py-2 focus:bg-white focus:border-amber-500 focus:outline-none">
+                            <option value="4">4%</option>
+                            <option value="10" selected>10%</option>
+                            <option value="22">22%</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- KPI Cards Riepilogo Food Cost -->
+                <div class="xl:col-span-5 grid grid-cols-4 gap-2">
+                    <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-2 flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Costo Tot. (<span id="kpi-portions-label">1</span>p)</span>
+                        <span id="kpi-total-cost" class="text-sm sm:text-base font-num font-bold text-slate-800 mt-0.5">€ 0,00</span>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-2 flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Food Cost / Porz.</span>
+                        <span id="kpi-portion-cost" class="text-sm sm:text-base font-num font-extrabold text-slate-900 mt-0.5">€ 0,00</span>
+                    </div>
+
+                    <div id="kpi-fc-card" class="bg-emerald-50 border border-emerald-200 rounded-xl p-2 flex flex-col justify-between transition-colors">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Food Cost %</span>
+                            <span id="kpi-fc-badge" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <span id="kpi-fc-percent" class="text-sm sm:text-base font-num font-extrabold text-emerald-700 mt-0.5">0,0%</span>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-2 flex flex-col justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400" title="Prezzo imponibile (esclusa IVA) meno Food Cost a porzione">Margine Netto</span>
+                        <span id="kpi-margin" class="text-sm sm:text-base font-num font-bold text-slate-800 mt-0.5">€ 0,00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- AREA PRINCIPALE A DUE COLONNE -->
+    <main class="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start print-grid">
+
+            <!-- ===================================================================== -->
+            <!-- COLONNA SINISTRA: 1. PREPARAZIONI BASE (Mise en place / Semilavorati) -->
+            <!-- ===================================================================== -->
+            <section class="lg:col-span-6 flex flex-col gap-5">
+                <!-- Intestazione Colonna Sinistra -->
+                <div class="bg-slate-900 text-white rounded-xl px-4 py-3.5 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+                    <div class="flex items-center gap-2.5">
+                        <span class="bg-amber-500 text-slate-950 font-extrabold text-xs px-2 py-0.5 rounded-md">1</span>
+                        <div>
+                            <h2 class="text-sm sm:text-base font-bold tracking-tight">PREPARAZIONI BASE <span class="font-normal text-slate-300 text-xs sm:text-sm">(Mise en place / Semilavorati)</span></h2>
+                            <p class="text-[11px] text-slate-400">Ricette massali, fondi, sughi e impasti con calcolo automatico costo al Kg/L</p>
+                        </div>
+                    </div>
+                    <button onclick="addBasePrep()" class="no-print inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-lg transition shadow-xs cursor-pointer">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Nuova Preparazione</span>
+                    </button>
+                </div>
+
+                <!-- Contenitore Dinamico delle Preparazioni Base -->
+                <div id="base-preps-container" class="flex flex-col gap-5">
+                    <!-- Renderizzato via JS -->
+                </div>
+            </section>
+
+            <!-- ===================================================================== -->
+            <!-- COLONNA DESTRA: 2. RICETTARIO DA SERVIZIO (Impiattamento & Porzioni)  -->
+            <!-- ===================================================================== -->
+            <section class="lg:col-span-6 flex flex-col gap-5">
+                <!-- Intestazione Colonna Destra -->
+                <div class="bg-indigo-950 text-white rounded-xl px-4 py-3.5 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+                    <div class="flex items-center gap-2.5">
+                        <span class="bg-emerald-400 text-slate-950 font-extrabold text-xs px-2 py-0.5 rounded-md">2</span>
+                        <div>
+                            <h2 class="text-sm sm:text-base font-bold tracking-tight">RICETTARIO DA SERVIZIO <span class="font-normal text-indigo-200 text-xs sm:text-sm">(Pass & Impiattamento)</span></h2>
+                            <p class="text-[11px] text-indigo-300">Grammature esatte per l'uscita del piatto (richiama i semilavorati da sinistra + extra)</p>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-900/80 border border-indigo-700/60 px-3 py-1.5 rounded-lg text-right">
+                        <span class="block text-[10px] uppercase tracking-wider text-indigo-300">Costo Tot. Servizio</span>
+                        <span id="service-section-total" class="font-num font-bold text-sm text-emerald-400">€ 0,00</span>
+                    </div>
+                </div>
+
+                <!-- Card Tabella Componenti al Servizio -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden card-shadow">
+                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="utensils" class="w-4 h-4 text-indigo-600"></i>
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Composizione Piatto (per <span id="service-portions-badge" class="text-indigo-600">1</span> porz.)</h3>
+                        </div>
+                        <div class="flex items-center gap-1.5 no-print">
+                            <button onclick="addServiceItem('prep')" class="inline-flex items-center gap-1 text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                                <i data-lucide="link" class="w-3.5 h-3.5"></i>
+                                <span>+ Da Preparazione Base</span>
+                            </button>
+                            <button onclick="addServiceItem('raw')" class="inline-flex items-center gap-1 text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                <span>+ Ingrediente Diretto</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabella Responsive Servizio -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-200 bg-slate-50/60 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                    <th class="py-2.5 px-3">Tipo</th>
+                                    <th class="py-2.5 px-2">Componente / Semilavorato</th>
+                                    <th class="py-2.5 px-2 text-right w-24">Dose/Porz. (g/ml)</th>
+                                    <th class="py-2.5 px-2 text-right w-24">Costo €/Kg-L</th>
+                                    <th class="py-2.5 px-3 text-right w-24">Costo (€)</th>
+                                    <th class="py-2.5 px-2 w-8 no-print"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="service-items-tbody" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                                <!-- Renderizzato via JS -->
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-50 border-t border-slate-200 font-semibold text-xs">
+                                    <td colspan="2" class="py-2.5 px-3 text-slate-600">Totale Peso & Costo al Servizio (<span id="footer-portions-text">1 porzione</span>)</td>
+                                    <td id="service-total-weight" class="py-2.5 px-2 text-right font-num text-slate-700">0 g</td>
+                                    <td class="py-2.5 px-2 text-right text-slate-400">—</td>
+                                    <td id="service-total-cost-cell" class="py-2.5 px-3 text-right font-num font-bold text-slate-900">€ 0,00</td>
+                                    <td class="no-print"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Card Procedimento al Servizio / Pass e Impiattamento -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-xs p-4 card-shadow">
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="service-procedure" class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                            <i data-lucide="flame" class="w-4 h-4 text-orange-500"></i>
+                            <span>Procedimento al Servizio / Pass & Impiattamento</span>
+                        </label>
+                        <span class="text-[11px] text-slate-400">Istruzioni linea / comanda</span>
+                    </div>
+                    <textarea id="service-procedure" rows="6" oninput="updateMeta('serviceProcedure', this.value)" placeholder="Descrivi passo passo come rigenerare le preparazioni base, tempi di cottura al momento, mantecatura, temperatura piatto e disposizione estetica..." class="w-full text-xs sm:text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed focus:bg-white focus:border-indigo-500 focus:outline-none"></textarea>
+                </div>
+
+                <!-- Card Allergeni e Note di Servizio -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-xs p-4 card-shadow">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Allergeni (Reg. UE 1169/2011) & Note di Servizio</h3>
+                    </div>
+
+                    <!-- Selettore Rapido Allergeni -->
+                    <div id="allergens-grid" class="flex flex-wrap gap-1.5 mb-3">
+                        <!-- Renderizzato via JS -->
+                    </div>
+
+                    <div>
+                        <label for="service-notes" class="block text-[11px] font-semibold text-slate-500 mb-1">Note aggiuntive (piatto di portata, temperatura servizio, guarnizioni):</label>
+                        <textarea id="service-notes" rows="2" oninput="updateMeta('serviceNotes', this.value)" placeholder="Es. Servire in fondina calda a 65°C. Guarnire con foglia di basilico fresco..." class="w-full text-xs sm:text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:bg-white focus:border-indigo-500 focus:outline-none"></textarea>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer Informativo -->
+    <footer class="bg-white border-t border-slate-200 py-3 px-4 sm:px-6 text-xs text-slate-400 mt-auto no-print">
+        <div class="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div>
+                <strong class="text-slate-600">Legenda Formula Food Cost:</strong>
+                <span>Peso Netto = Peso Lordo × (1 - Scarto%)</span> •
+                <span>Costo/Kg Semilavorato = Costo Tot. Ingredienti / Resa Finale (Kg)</span> •
+                <span>Food Cost % = (Costo Porzione / Prezzo Imponibile Net. IVA) × 100</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> &le; 28% Ottimo</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> 28–35% Attenzione</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> &gt; 35% Critico</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // =========================================================================
+        // 1. DATI PREDEFINITI (ESEMPIO REALISTICO: TAGLIATELLE AL RAGÙ TRADIZIONALE)
+        // =========================================================================
+        const ALLERGENS_LIST = [
+            "Glutine", "Crostacei", "Uova", "Pesce", "Arachidi", "Soia",
+            "Latte", "Frutta a guscio", "Sedano", "Senape", "Sesamo",
+            "Solfiti", "Lupini", "Molluschi"
+        ];
+
+        const DEFAULT_RECIPE = {
+            id: "recipe-tagliatelle-ragu",
+            title: "Tagliatelle al Ragù Tradizionale Bolognese",
+            category: "Primi Piatti",
+            portions: 1,
+            sellingPrice: 15.00,
+            vatRate: 10,
+            basePreparations: [
+                {
+                    id: "prep-ragu",
+                    name: "Ragù alla Bolognese (Lotto 3,5 kg)",
+                    manualYieldGrams: 3500, // Resa post-cottura (calo peso naturale dopo 3h di sobbollimento)
+                    useManualYield: true,
+                    procedure: "1. Tritare finemente sedano, carota e cipolla (brunoise 3mm) insieme alla pancetta tesa.\n2. In casseruola pesante rosolare la pancetta a fuoco dolce per 8 min fino a sciogliere il grasso, poi unire il trito di verdure e appassire per 12 min.\n3. Alzare la fiamma, aggiungere il macinato di manzo sgranandolo bene e rosolare finché non sfrigola (circa 15 min).\n4. Sfumare con vino rosso e lasciar evaporare completamente l'alcol. Aggiungere la passata e il concentrato.\n5. Bagnare con brodo di carne caldo, portare a leggero bollore, abbassare al minimo e cuocere semicoperto per 3 ore mescolando ogni 20 min.\n6. A fine cottura aggiustare di sale e pepe e incorporare il latte per smorzare l'acidità del pomodoro. Abbattere a +3°C e porzionare.",
+                    ingredients: [
+                        { id: "ing-1", name: "Polpa di manzo macinata (cartella/pancia)", grossWeight: 2000, wastePercent: 0, pricePerKg: 11.80 },
+                        { id: "ing-2", name: "Pancetta tesa di suino fresca", grossWeight: 600, wastePercent: 5, pricePerKg: 9.50 },
+                        { id: "ing-3", name: "Passata di pomodoro rustica", grossWeight: 1200, wastePercent: 0, pricePerKg: 1.90 },
+                        { id: "ing-4", name: "Carote fresche", grossWeight: 250, wastePercent: 15, pricePerKg: 1.60 },
+                        { id: "ing-5", name: "Sedano verde", grossWeight: 250, wastePercent: 20, pricePerKg: 2.10 },
+                        { id: "ing-6", name: "Cipolla dorata", grossWeight: 250, wastePercent: 12, pricePerKg: 1.40 },
+                        { id: "ing-7", name: "Vino rosso Sangiovese", grossWeight: 300, wastePercent: 0, pricePerKg: 3.80 },
+                        { id: "ing-8", name: "Brodo di carne", grossWeight: 600, wastePercent: 0, pricePerKg: 1.20 },
+                        { id: "ing-9", name: "Latte intero fresco", grossWeight: 150, wastePercent: 0, pricePerKg: 1.45 },
+                        { id: "ing-10", name: "Concentrato di pomodoro, sale e pepe", grossWeight: 80, wastePercent: 0, pricePerKg: 4.50 }
+                    ]
+                },
+                {
+                    id: "prep-sfoglia",
+                    name: "Tagliatelle Fresche all'Uovo (Impasto Base)",
+                    manualYieldGrams: 1520,
+                    useManualYield: false, // Calcolo automatico dalla somma dei pesi netti
+                    procedure: "1. Disporre la farina 00 e la semola rimacinata a fontana sulla spianatoia o in planetaria.\n2. Versare al centro le uova intere e i tuorli a temperatura ambiente.\n3. Impastare energicamente per 12-15 minuti fino a ottenere un panetto liscio, omogeneo ed elastico.\n4. Avvolgere in pellicola alimentare e far riposare 45 minuti a temperatura ambiente.\n5. Tirare la sfoglia allo spessore di 1,2 mm, lasciar asciugare 10 minuti, arrotolare e tagliare a 7 mm di larghezza. Spolverare con semola e formare nidi da 140g.",
+                    ingredients: [
+                        { id: "ing-s1", name: "Farina 00 per pasta fresca (W260)", grossWeight: 800, wastePercent: 0, pricePerKg: 1.35 },
+                        { id: "ing-s2", name: "Semola rimacinata di grano duro", grossWeight: 200, wastePercent: 0, pricePerKg: 1.55 },
+                        { id: "ing-s3", name: "Uova fresche cat. A (circa 8 uova)", grossWeight: 480, wastePercent: 10, pricePerKg: 4.20 },
+                        { id: "ing-s4", name: "Tuorli d'uovo pastorizzati", grossWeight: 100, wastePercent: 0, pricePerKg: 7.80 }
+                    ]
+                }
+            ],
+            serviceItems: [
+                { id: "srv-1", type: "prep", prepId: "prep-sfoglia", name: "", portionWeight: 140, pricePerKg: 0 },
+                { id: "srv-2", type: "prep", prepId: "prep-ragu", name: "", portionWeight: 130, pricePerKg: 0 },
+                { id: "srv-3", type: "raw", prepId: "", name: "Parmigiano Reggiano DOP 30 mesi grattugiato", portionWeight: 20, pricePerKg: 19.50 },
+                { id: "srv-4", type: "raw", prepId: "", name: "Burro di centrifuga (per mantecatura)", portionWeight: 10, pricePerKg: 11.20 },
+                { id: "srv-5", type: "raw", prepId: "", name: "Olio Extra Vergine d'Oliva (finitura a crudo)", portionWeight: 5, pricePerKg: 12.00 }
+            ],
+            serviceProcedure: "1. Rigenerare 130g di Ragù alla Bolognese in padella antiaderente a fuoco dolce con 30ml di acqua di cottura della pasta.\n2. Tuffare il nido di 140g di Tagliatelle fresche in acqua bollente salata (10g sale/litro) per 2 minuti e 30 secondi.\n3. Scolare le tagliatelle direttamente nella padella con il ragù caldo, aggiungere la noce di burro (10g) e metà del Parmigiano Reggiano (10g).\n4. Saltare e mantecare all'onda per 30 secondi fino a creare un'emulsione lucida e avvolgente.\n5. Impiattare a nido alto con pinza e mestolo al centro di una fondina calda, nappare con il ragù rimasto, completare con il restante Parmigiano e un filo d'Olio EVO a crudo.",
+            allergens: ["Glutine", "Uova", "Latte", "Sedano"],
+            serviceNotes: "Servire su piatto fondo preriscaldato a 65°C. Verificare che la salsa risulti ben legata e non acquosa sul fondo del piatto."
+        };
+
+        // =========================================================================
+        // 2. STATO DELL'APPLICAZIONE E LOCALSTORAGE
+        // =========================================================================
+        const STORAGE_KEY = "chefcost_pro_recipes_v1";
+        let currentRecipe = null;
+        let savedRecipes = [];
+
+        function generateId(prefix = "id") {
+            return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        }
+
+        function deepClone(obj) {
+            return JSON.parse(JSON.stringify(obj));
+        }
+
+        function initApp() {
+            loadSavedRecipesFromStorage();
+            if (savedRecipes.length > 0) {
+                currentRecipe = deepClone(savedRecipes[0]);
+            } else {
+                currentRecipe = deepClone(DEFAULT_RECIPE);
+                savedRecipes = [deepClone(DEFAULT_RECIPE)];
+                persistRecipesToStorage();
+            }
+            populateSavedSelect();
+            renderAll();
+        }
+
+        function loadSavedRecipesFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        savedRecipes = parsed;
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error("Errore lettura LocalStorage:", e);
+            }
+            savedRecipes = [deepClone(DEFAULT_RECIPE)];
+        }
+
+        function persistRecipesToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(savedRecipes));
+            } catch (e) {
+                showToast("Impossibile salvare nel browser (memoria piena o bloccata).", "error");
+            }
+        }
+
+        // =========================================================================
+        // 3. MOTORE DI CALCOLO (FOOD COST, RESE, SCARTI, MARGINI)
+        // =========================================================================
+        function calculatePrepMetrics(prep) {
+            let totalGross = 0;
+            let totalNet = 0;
+            let totalCost = 0;
+
+            const enrichedIngredients = prep.ingredients.map(ing => {
+                const gross = Math.max(0, parseFloat(ing.grossWeight) || 0);
+                const waste = Math.min(99.9, Math.max(0, parseFloat(ing.wastePercent) || 0));
+                const priceKg = Math.max(0, parseFloat(ing.pricePerKg) || 0);
+
+                const net = gross * (1 - waste / 100);
+                // Il costo dell'ingrediente si calcola sempre sul peso lordo acquistato!
+                const cost = (gross / 1000) * priceKg;
+
+                totalGross += gross;
+                totalNet += net;
+                totalCost += cost;
+
+                return { ...ing, netWeight: net, cost };
+            });
+
+            const finalYieldGrams = prep.useManualYield
+                ? Math.max(1, parseFloat(prep.manualYieldGrams) || 0)
+                : Math.max(1, totalNet);
+
+            // Costo al Kg/Litro della preparazione finita
+            const costPerKg = finalYieldGrams > 0 ? (totalCost / (finalYieldGrams / 1000)) : 0;
+
+            return {
+                enrichedIngredients,
+                totalGross,
+                totalNet,
+                totalCost,
+                finalYieldGrams,
+                costPerKg
+            };
+        }
+
+        function calculateAllMetrics() {
+            // 1. Calcola metriche per ogni preparazione base
+            const prepMap = {};
+            currentRecipe.basePreparations.forEach(prep => {
+                prepMap[prep.id] = {
+                    prep,
+                    metrics: calculatePrepMetrics(prep)
+                };
+            });
+
+            // 2. Calcola metriche righe al servizio (per 1 porzione e per N porzioni)
+            const portions = Math.max(1, parseInt(currentRecipe.portions) || 1);
+            let totalWeightPerPortion = 0;
+            let totalCostPerPortion = 0;
+
+            const enrichedServiceItems = currentRecipe.serviceItems.map(item => {
+                const dosePerPortion = Math.max(0, parseFloat(item.portionWeight) || 0);
+                let unitPricePerKg = 0;
+                let displayName = item.name;
+                let isMissingPrep = false;
+
+                if (item.type === "prep") {
+                    const linked = prepMap[item.prepId];
+                    if (linked) {
+                        unitPricePerKg = linked.metrics.costPerKg;
+                        displayName = linked.prep.name;
+                    } else {
+                        isMissingPrep = true;
+                        displayName = "Preparazione non selezionata";
+                    }
+                } else {
+                    unitPricePerKg = Math.max(0, parseFloat(item.pricePerKg) || 0);
+                }
+
+                const costPerPortion = (dosePerPortion / 1000) * unitPricePerKg;
+                const costForAllPortions = costPerPortion * portions;
+
+                totalWeightPerPortion += dosePerPortion;
+                totalCostPerPortion += costPerPortion;
+
+                return {
+                    ...item,
+                    displayName,
+                    unitPricePerKg,
+                    costPerPortion,
+                    costForAllPortions,
+                    isMissingPrep
+                };
+            });
+
+            const totalDishCost = totalCostPerPortion * portions;
+            const sellingPriceGross = Math.max(0, parseFloat(currentRecipe.sellingPrice) || 0);
+            const vatRate = Math.max(0, parseFloat(currentRecipe.vatRate) || 0);
+            const sellingPriceNet = vatRate > 0 ? sellingPriceGross / (1 + vatRate / 100) : sellingPriceGross;
+
+            // Food Cost % calcolato sul prezzo di vendita imponibile (netto IVA), standard professionale ristorazione
+            const foodCostPercent = sellingPriceNet > 0 ? (totalCostPerPortion / sellingPriceNet) * 100 : 0;
+            const contributionMargin = sellingPriceNet - totalCostPerPortion;
+
+            return {
+                prepMap,
+                enrichedServiceItems,
+                portions,
+                totalWeightPerPortion,
+                totalCostPerPortion,
+                totalDishCost,
+                sellingPriceGross,
+                sellingPriceNet,
+                foodCostPercent,
+                contributionMargin
+            };
+        }
+
+        // =========================================================================
+        // 4. FORMATTAZIONE VALUTA & NUMERI
+        // =========================================================================
+        function formatCurrency(val) {
+            return "€ " + (isFinite(val) ? val : 0).toLocaleString("it-IT", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function formatNumber(val, decimals = 0) {
+            return (isFinite(val) ? val : 0).toLocaleString("it-IT", {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        // =========================================================================
+        // 5. RENDERING INTERFACCIA
+        // =========================================================================
+        function renderAll() {
+            // Sincronizza campi header
+            document.getElementById("dish-title").value = currentRecipe.title || "";
+            document.getElementById("dish-category").value = currentRecipe.category || "Primi Piatti";
+            document.getElementById("dish-portions").value = currentRecipe.portions || 1;
+            document.getElementById("dish-price").value = currentRecipe.sellingPrice || 0;
+            document.getElementById("dish-vat").value = currentRecipe.vatRate ?? 10;
+            document.getElementById("service-procedure").value = currentRecipe.serviceProcedure || "";
+            document.getElementById("service-notes").value = currentRecipe.serviceNotes || "";
+
+            renderBasePreparations();
+            renderServiceTable();
+            renderAllergens();
+            updateCalculatedDisplays();
+            lucide.createIcons();
+        }
+
+        function renderBasePreparations() {
+            const container = document.getElementById("base-preps-container");
+            const { prepMap } = calculateAllMetrics();
+
+            if (currentRecipe.basePreparations.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
+                        <p class="text-sm font-semibold text-slate-600 mb-1">Nessuna preparazione base inserita</p>
+                        <p class="text-xs text-slate-400 mb-4">Aggiungi un fondo, un sugo, un impasto o una salsa per calcolarne il costo al Kg e usarlo nel servizio.</p>
+                        <button onclick="addBasePrep()" class="inline-flex items-center gap-1.5 bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-slate-800 transition">
+                            <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i>
+                            <span>Crea Prima Preparazione Base</span>
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = currentRecipe.basePreparations.map((prep, pIdx) => {
+                const m = prepMap[prep.id].metrics;
+                const yieldDiffPercent = m.totalNet > 0 ? (((m.finalYieldGrams - m.totalNet) / m.totalNet) * 100) : 0;
+
+                const rowsHtml = m.enrichedIngredients.map((ing, iIdx) => `
+                    <tr class="hover:bg-slate-50/80 transition group">
+                        <td class="py-1.5 px-2.5">
+                            <input type="text" value="${escapeHtml(ing.name)}"
+                                oninput="updateIngredient('${prep.id}', '${ing.id}', 'name', this.value)"
+                                placeholder="Nome ingrediente..."
+                                class="w-full text-xs font-medium text-slate-800 bg-transparent border border-transparent hover:border-slate-200 focus:border-amber-500 focus:bg-white rounded px-1.5 py-1 focus:outline-none">
+                        </td>
+                        <td class="py-1.5 px-1.5">
+                            <input type="number" min="0" step="1" value="${ing.grossWeight}"
+                                oninput="updateIngredient('${prep.id}', '${ing.id}', 'grossWeight', parseFloat(this.value) || 0)"
+                                class="w-full text-right font-num text-xs text-slate-800 bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white rounded px-1.5 py-1 focus:outline-none">
+                        </td>
+                        <td class="py-1.5 px-1.5">
+                            <input type="number" min="0" max="99" step="1" value="${ing.wastePercent}"
+                                oninput="updateIngredient('${prep.id}', '${ing.id}', 'wastePercent', parseFloat(this.value) || 0)"
+                                class="w-full text-right font-num text-xs text-slate-600 bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white rounded px-1.5 py-1 focus:outline-none">
+                        </td>
+                        <td class="py-1.5 px-2 text-right font-num text-xs text-slate-500" id="ing-net-${ing.id}">
+                            ${formatNumber(ing.netWeight, 0)} g
+                        </td>
+                        <td class="py-1.5 px-1.5">
+                            <input type="number" min="0" step="0.01" value="${ing.pricePerKg}"
+                                oninput="updateIngredient('${prep.id}', '${ing.id}', 'pricePerKg', parseFloat(this.value) || 0)"
+                                class="w-full text-right font-num text-xs text-slate-800 bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white rounded px-1.5 py-1 focus:outline-none">
+                        </td>
+                        <td class="py-1.5 px-2.5 text-right font-num text-xs font-semibold text-slate-800" id="ing-cost-${ing.id}">
+                            ${formatCurrency(ing.cost)}
+                        </td>
+                        <td class="py-1.5 px-1.5 text-center no-print">
+                            <button onclick="removeIngredient('${prep.id}', '${ing.id}')" title="Rimuovi ingrediente" class="p-1 text-slate-300 hover:text-rose-600 rounded transition cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join("");
+
+                return `
+                <article class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden card-shadow" id="prep-card-${prep.id}">
+                    <!-- Header Card Preparazione -->
+                    <div class="bg-amber-50/70 border-b border-amber-200/80 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+                            <span class="bg-amber-500/20 text-amber-800 font-num font-bold text-xs px-2 py-0.5 rounded">1.${pIdx + 1}</span>
+                            <input type="text" value="${escapeHtml(prep.name)}"
+                                oninput="updatePrepField('${prep.id}', 'name', this.value)"
+                                placeholder="Nome Preparazione (es. Ragù alla Bolognese)"
+                                class="w-full text-sm font-bold text-slate-900 bg-white/80 border border-amber-200 rounded-lg px-2.5 py-1 focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <div class="bg-white border border-amber-300 rounded-lg px-2.5 py-1 flex items-center gap-2 shadow-2xs">
+                                <span class="text-[10px] font-bold uppercase text-slate-500">Costo Finito:</span>
+                                <span id="prep-cost-kg-${prep.id}" class="font-num font-extrabold text-xs sm:text-sm text-amber-700">${formatCurrency(m.costPerKg)}/kg</span>
+                            </div>
+                            <button onclick="removeBasePrep('${prep.id}')" title="Elimina questa preparazione" class="no-print p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabella Ingredienti Preparazione Base -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                    <th class="py-2 px-2.5">Ingrediente</th>
+                                    <th class="py-2 px-1.5 text-right w-20">Lordo (g/ml)</th>
+                                    <th class="py-2 px-1.5 text-right w-16">Scarto %</th>
+                                    <th class="py-2 px-2 text-right w-20">Netto</th>
+                                    <th class="py-2 px-1.5 text-right w-20">€/Kg-L</th>
+                                    <th class="py-2 px-2.5 text-right w-20">Costo €</th>
+                                    <th class="py-2 px-1.5 w-7 no-print"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${rowsHtml}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-50/90 border-t border-slate-200 text-xs font-semibold">
+                                    <td class="py-2 px-2.5">
+                                        <button onclick="addIngredient('${prep.id}')" class="no-print inline-flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-900 bg-amber-100/70 hover:bg-amber-100 px-2.5 py-1 rounded-md transition cursor-pointer">
+                                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                            <span>Aggiungi Ingrediente</span>
+                                        </button>
+                                        <span class="hidden print-only text-slate-600">Totale Materia Prima</span>
+                                    </td>
+                                    <td id="prep-tot-gross-${prep.id}" class="py-2 px-1.5 text-right font-num text-slate-600">${formatNumber(m.totalGross, 0)} g</td>
+                                    <td class="py-2 px-1.5 text-right text-slate-400">—</td>
+                                    <td id="prep-tot-net-${prep.id}" class="py-2 px-2 text-right font-num text-slate-700">${formatNumber(m.totalNet, 0)} g</td>
+                                    <td class="py-2 px-1.5 text-right text-slate-400">—</td>
+                                    <td id="prep-tot-cost-${prep.id}" class="py-2 px-2.5 text-right font-num font-bold text-slate-900">${formatCurrency(m.totalCost)}</td>
+                                    <td class="no-print"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <!-- Barra Gestione Resa Finale (Calo Cottura / Peso Finito) -->
+                    <div class="bg-slate-100/80 border-t border-slate-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div class="flex items-center gap-2">
+                            <label class="inline-flex items-center gap-1.5 cursor-pointer select-none font-medium text-slate-700">
+                                <input type="checkbox" ${prep.useManualYield ? "checked" : ""}
+                                    onchange="updatePrepField('${prep.id}', 'useManualYield', this.checked)"
+                                    class="rounded text-amber-600 focus:ring-amber-500">
+                                <span>Resa reale post-cottura (calo peso):</span>
+                            </label>
+                            <div class="flex items-center gap-1">
+                                <input type="number" min="1" step="10"
+                                    value="${prep.useManualYield ? prep.manualYieldGrams : Math.round(m.totalNet)}"
+                                    ${!prep.useManualYield ? "disabled" : ""}
+                                    oninput="updatePrepField('${prep.id}', 'manualYieldGrams', parseFloat(this.value) || 0)"
+                                    id="prep-yield-input-${prep.id}"
+                                    class="w-24 text-right font-num font-bold text-slate-900 bg-white disabled:bg-slate-200/70 disabled:text-slate-500 border border-slate-300 rounded px-2 py-1 focus:border-amber-500 focus:outline-none">
+                                <span class="text-slate-500 font-medium">g / ml</span>
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-slate-500" id="prep-yield-info-${prep.id}">
+                            ${prep.useManualYield
+                                ? `Variazione da netto: <strong class="font-num ${yieldDiffPercent < 0 ? 'text-amber-700' : 'text-emerald-700'}">${yieldDiffPercent > 0 ? '+' : ''}${formatNumber(yieldDiffPercent, 1)}%</strong>`
+                                : `Resa pari al peso netto totale`}
+                        </div>
+                    </div>
+
+                    <!-- Procedimento Preparazione Base -->
+                    <div class="p-3.5 border-t border-slate-200 bg-white">
+                        <label class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                            <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-600"></i>
+                            <span>Procedimento Preparazione Base (Tecnica, Tempi & Temperature)</span>
+                        </label>
+                        <textarea rows="4"
+                            oninput="updatePrepField('${prep.id}', 'procedure', this.value)"
+                            placeholder="Scrivi qui il procedimento dettagliato per realizzare questa preparazione..."
+                            class="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-2.5 leading-relaxed focus:bg-white focus:border-amber-500 focus:outline-none">${escapeHtml(prep.procedure || "")}</textarea>
+                    </div>
+                </article>
+                `;
+            }).join("");
+        }
+
+        function renderServiceTable() {
+            const tbody = document.getElementById("service-items-tbody");
+            const { enrichedServiceItems } = calculateAllMetrics();
+
+            if (enrichedServiceItems.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-6 px-4 text-center text-xs text-slate-400">
+                            Nessun componente al servizio. Usa i pulsanti qui sopra per collegare una Preparazione Base o aggiungere un ingrediente diretto.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = enrichedServiceItems.map(item => {
+                if (item.type === "prep") {
+                    const optionsHtml = currentRecipe.basePreparations.map(p =>
+                        `<option value="${p.id}" ${p.id === item.prepId ? "selected" : ""}>${escapeHtml(p.name)}</option>`
+                    ).join("");
+
+                    return `
+                    <tr class="hover:bg-amber-50/30 transition">
+                        <td class="py-2 px-3">
+                            <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
+                                <i data-lucide="link" class="w-2.5 h-2.5"></i> Base
+                            </span>
+                        </td>
+                        <td class="py-2 px-2">
+                            <select onchange="updateServiceItem('${item.id}', 'prepId', this.value)"
+                                class="w-full text-xs font-semibold text-slate-800 bg-amber-50/50 border border-amber-200 rounded-lg px-2 py-1.5 focus:bg-white focus:border-amber-500 focus:outline-none">
+                                ${optionsHtml || '<option value="">Nessuna prep. disponibile</option>'}
+                            </select>
+                        </td>
+                        <td class="py-2 px-2">
+                            <input type="number" min="0" step="1" value="${item.portionWeight}"
+                                oninput="updateServiceItem('${item.id}', 'portionWeight', parseFloat(this.value) || 0)"
+                                class="w-full text-right font-num font-bold text-xs text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 focus:bg-white focus:border-indigo-500 focus:outline-none">
+                        </td>
+                        <td class="py-2 px-2 text-right font-num text-xs text-amber-700 font-medium" id="srv-unit-price-${item.id}">
+                            ${formatCurrency(item.unitPricePerKg)}
+                        </td>
+                        <td class="py-2 px-3 text-right font-num text-xs font-bold text-slate-900" id="srv-cost-${item.id}">
+                            ${formatCurrency(item.costForAllPortions)}
+                        </td>
+                        <td class="py-2 px-2 text-center no-print">
+                            <button onclick="removeServiceItem('${item.id}')" title="Rimuovi riga" class="p-1 text-slate-300 hover:text-rose-600 rounded transition cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    `;
+                } else {
+                    return `
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="py-2 px-3">
+                            <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                Extra
+                            </span>
+                        </td>
+                        <td class="py-2 px-2">
+                            <input type="text" value="${escapeHtml(item.name)}"
+                                oninput="updateServiceItem('${item.id}', 'name', this.value)"
+                                placeholder="Es. Parmigiano, Olio EVO, Guarnizione..."
+                                class="w-full text-xs font-medium text-slate-800 bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500 focus:bg-white rounded-lg px-2 py-1.5 focus:outline-none">
+                        </td>
+                        <td class="py-2 px-2">
+                            <input type="number" min="0" step="1" value="${item.portionWeight}"
+                                oninput="updateServiceItem('${item.id}', 'portionWeight', parseFloat(this.value) || 0)"
+                                class="w-full text-right font-num font-bold text-xs text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 focus:bg-white focus:border-indigo-500 focus:outline-none">
+                        </td>
+                        <td class="py-2 px-2">
+                            <input type="number" min="0" step="0.01" value="${item.pricePerKg}"
+                                oninput="updateServiceItem('${item.id}', 'pricePerKg', parseFloat(this.value) || 0)"
+                                class="w-full text-right font-num text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 focus:bg-white focus:border-indigo-500 focus:outline-none">
+                        </td>
+                        <td class="py-2 px-3 text-right font-num text-xs font-bold text-slate-900" id="srv-cost-${item.id}">
+                            ${formatCurrency(item.costForAllPortions)}
+                        </td>
+                        <td class="py-2 px-2 text-center no-print">
+                            <button onclick="removeServiceItem('${item.id}')" title="Rimuovi riga" class="p-1 text-slate-300 hover:text-rose-600 rounded transition cursor-pointer">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    `;
+                }
+            }).join("");
+        }
+
+        function renderAllergens() {
+            const container = document.getElementById("allergens-grid");
+            const activeSet = new Set(currentRecipe.allergens || []);
+
+            container.innerHTML = ALLERGENS_LIST.map(allergen => {
+                const isActive = activeSet.has(allergen);
+                return `
+                    <button type="button" onclick="toggleAllergen('${allergen}')"
+                        class="px-2.5 py-1 rounded-full text-[11px] font-semibold border transition cursor-pointer ${
+                            isActive
+                                ? "bg-amber-500 text-slate-950 border-amber-600 shadow-2xs"
+                                : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                        }">
+                        ${isActive ? "✓ " : ""}${allergen}
+                    </button>
+                `;
+            }).join("");
+        }
+
+        // Aggiorna solo i valori calcolati nel DOM senza perdere il focus degli input mentre l'utente digita
+        function updateCalculatedDisplays() {
+            const m = calculateAllMetrics();
+
+            // 1. Aggiorna totali preparazioni base
+            Object.values(m.prepMap).forEach(({ prep, metrics }) => {
+                metrics.enrichedIngredients.forEach(ing => {
+                    const netEl = document.getElementById(`ing-net-${ing.id}`);
+                    const costEl = document.getElementById(`ing-cost-${ing.id}`);
+                    if (netEl) netEl.textContent = `${formatNumber(ing.netWeight, 0)} g`;
+                    if (costEl) costEl.textContent = formatCurrency(ing.cost);
+                });
+
+                const totGrossEl = document.getElementById(`prep-tot-gross-${prep.id}`);
+                const totNetEl = document.getElementById(`prep-tot-net-${prep.id}`);
+                const totCostEl = document.getElementById(`prep-tot-cost-${prep.id}`);
+                const costKgEl = document.getElementById(`prep-cost-kg-${prep.id}`);
+                const yieldInputEl = document.getElementById(`prep-yield-input-${prep.id}`);
+                const yieldInfoEl = document.getElementById(`prep-yield-info-${prep.id}`);
+
+                if (totGrossEl) totGrossEl.textContent = `${formatNumber(metrics.totalGross, 0)} g`;
+                if (totNetEl) totNetEl.textContent = `${formatNumber(metrics.totalNet, 0)} g`;
+                if (totCostEl) totCostEl.textContent = formatCurrency(metrics.totalCost);
+                if (costKgEl) costKgEl.textContent = `${formatCurrency(metrics.costPerKg)}/kg`;
+
+                if (yieldInputEl && !prep.useManualYield) {
+                    yieldInputEl.value = Math.round(metrics.totalNet);
+                }
+                if (yieldInfoEl) {
+                    if (prep.useManualYield && metrics.totalNet > 0) {
+                        const diff = ((metrics.finalYieldGrams - metrics.totalNet) / metrics.totalNet) * 100;
+                        yieldInfoEl.innerHTML = `Variazione da netto: <strong class="font-num ${diff < 0 ? 'text-amber-700' : 'text-emerald-700'}">${diff > 0 ? '+' : ''}${formatNumber(diff, 1)}%</strong>`;
+                    } else {
+                        yieldInfoEl.textContent = "Resa pari al peso netto totale";
+                    }
+                }
+            });
+
+            // 2. Aggiorna righe e totali tabella servizio
+            m.enrichedServiceItems.forEach(item => {
+                const unitPriceEl = document.getElementById(`srv-unit-price-${item.id}`);
+                const costEl = document.getElementById(`srv-cost-${item.id}`);
+                if (unitPriceEl) unitPriceEl.textContent = formatCurrency(item.unitPricePerKg);
+                if (costEl) costEl.textContent = formatCurrency(item.costForAllPortions);
+            });
+
+            const totalServiceWeight = m.totalWeightPerPortion * m.portions;
+            document.getElementById("service-portions-badge").textContent = m.portions;
+            document.getElementById("footer-portions-text").textContent = m.portions === 1 ? "1 porzione" : `${m.portions} porzioni`;
+            document.getElementById("service-total-weight").textContent = `${formatNumber(totalServiceWeight, 0)} g`;
+            document.getElementById("service-total-cost-cell").textContent = formatCurrency(m.totalDishCost);
+            document.getElementById("service-section-total").textContent = formatCurrency(m.totalDishCost);
+
+            // 3. Aggiorna KPI nell'Header
+            document.getElementById("kpi-portions-label").textContent = m.portions;
+            document.getElementById("kpi-total-cost").textContent = formatCurrency(m.totalDishCost);
+            document.getElementById("kpi-portion-cost").textContent = formatCurrency(m.totalCostPerPortion);
+            document.getElementById("kpi-fc-percent").textContent = `${formatNumber(m.foodCostPercent, 1)}%`;
+            document.getElementById("kpi-margin").textContent = formatCurrency(m.contributionMargin);
+
+            // Indicatore visivo semaforo Food Cost % (verde <= 28%, giallo 28-35%, rosso > 35%)
+            const fcCard = document.getElementById("kpi-fc-card");
+            const fcBadge = document.getElementById("kpi-fc-badge");
+            const fcText = document.getElementById("kpi-fc-percent");
+
+            fcCard.className = "rounded-xl p-2 flex flex-col justify-between transition-colors border ";
+            fcBadge.className = "w-2.5 h-2.5 rounded-full ";
+            fcText.className = "text-sm sm:text-base font-num font-extrabold mt-0.5 ";
+
+            if (m.foodCostPercent <= 28) {
+                fcCard.className += "bg-emerald-50 border-emerald-200";
+                fcBadge.className += "bg-emerald-500";
+                fcText.className += "text-emerald-700";
+            } else if (m.foodCostPercent <= 35) {
+                fcCard.className += "bg-amber-50 border-amber-200";
+                fcBadge.className += "bg-amber-500";
+                fcText.className += "text-amber-700";
+            } else {
+                fcCard.className += "bg-rose-50 border-rose-200";
+                fcBadge.className += "bg-rose-500";
+                fcText.className += "text-rose-700";
+            }
+        }
+
+        // =========================================================================
+        // 6. AZIONI & MANIPOLAZIONE DATI
+        // =========================================================================
+        function updateMeta(field, value) {
+            currentRecipe[field] = value;
+            updateCalculatedDisplays();
+        }
+
+        function addBasePrep() {
+            const newPrep = {
+                id: generateId("prep"),
+                name: `Nuova Preparazione #${currentRecipe.basePreparations.length + 1}`,
+                manualYieldGrams: 1000,
+                useManualYield: false,
+                procedure: "",
+                ingredients: [
+                    { id: generateId("ing"), name: "", grossWeight: 1000, wastePercent: 0, pricePerKg: 0 }
+                ]
+            };
+            currentRecipe.basePreparations.push(newPrep);
+            renderAll();
+            showToast("Nuova preparazione base aggiunta.");
+        }
+
+        function removeBasePrep(prepId) {
+            currentRecipe.basePreparations = currentRecipe.basePreparations.filter(p => p.id !== prepId);
+            // Aggiorna eventuali collegamenti orfani nel servizio
+            currentRecipe.serviceItems.forEach(item => {
+                if (item.type === "prep" && item.prepId === prepId) {
+                    item.prepId = currentRecipe.basePreparations[0]?.id || "";
+                }
+            });
+            renderAll();
+            showToast("Preparazione base rimossa.");
+        }
+
+        function updatePrepField(prepId, field, value) {
+            const prep = currentRecipe.basePreparations.find(p => p.id === prepId);
+            if (!prep) return;
+            prep[field] = value;
+
+            if (field === "useManualYield") {
+                const inputEl = document.getElementById(`prep-yield-input-${prepId}`);
+                if (inputEl) {
+                    inputEl.disabled = !value;
+                    if (value && (!prep.manualYieldGrams || prep.manualYieldGrams <= 0)) {
+                        const m = calculatePrepMetrics(prep);
+                        prep.manualYieldGrams = Math.round(m.totalNet);
+                        inputEl.value = prep.manualYieldGrams;
+                    }
+                }
+            }
+            if (field === "name") {
+                // Aggiorna anche i dropdown nella colonna destra
+                renderServiceTable();
+            }
+            updateCalculatedDisplays();
+        }
+
+        function addIngredient(prepId) {
+            const prep = currentRecipe.basePreparations.find(p => p.id === prepId);
+            if (!prep) return;
+            prep.ingredients.push({
+                id: generateId("ing"),
+                name: "",
+                grossWeight: 100,
+                wastePercent: 0,
+                pricePerKg: 0
+            });
+            renderAll();
+        }
+
+        function removeIngredient(prepId, ingId) {
+            const prep = currentRecipe.basePreparations.find(p => p.id === prepId);
+            if (!prep) return;
+            prep.ingredients = prep.ingredients.filter(i => i.id !== ingId);
+            renderAll();
+        }
+
+        function updateIngredient(prepId, ingId, field, value) {
+            const prep = currentRecipe.basePreparations.find(p => p.id === prepId);
+            if (!prep) return;
+            const ing = prep.ingredients.find(i => i.id === ingId);
+            if (!ing) return;
+            ing[field] = value;
+            updateCalculatedDisplays();
+        }
+
+        function addServiceItem(type) {
+            if (type === "prep") {
+                if (currentRecipe.basePreparations.length === 0) {
+                    showToast("Crea prima una Preparazione Base nella colonna sinistra!", "warning");
+                    return;
+                }
+                currentRecipe.serviceItems.push({
+                    id: generateId("srv"),
+                    type: "prep",
+                    prepId: currentRecipe.basePreparations[0].id,
+                    name: "",
+                    portionWeight: 100,
+                    pricePerKg: 0
+                });
+            } else {
+                currentRecipe.serviceItems.push({
+                    id: generateId("srv"),
+                    type: "raw",
+                    prepId: "",
+                    name: "",
+                    portionWeight: 15,
+                    pricePerKg: 0
+                });
+            }
+            renderAll();
+        }
+
+        function removeServiceItem(itemId) {
+            currentRecipe.serviceItems = currentRecipe.serviceItems.filter(i => i.id !== itemId);
+            renderAll();
+        }
+
+        function updateServiceItem(itemId, field, value) {
+            const item = currentRecipe.serviceItems.find(i => i.id === itemId);
+            if (!item) return;
+            item[field] = value;
+            updateCalculatedDisplays();
+        }
+
+        function toggleAllergen(allergen) {
+            if (!Array.isArray(currentRecipe.allergens)) {
+                currentRecipe.allergens = [];
+            }
+            const idx = currentRecipe.allergens.indexOf(allergen);
+            if (idx >= 0) {
+                currentRecipe.allergens.splice(idx, 1);
+            } else {
+                currentRecipe.allergens.push(allergen);
+            }
+            renderAllergens();
+        }
+
+        // =========================================================================
+        // 7. SALVATAGGIO, ARCHIVIO, EXPORT JSON & DOWNLOAD HTML
+        // =========================================================================
+        function populateSavedSelect() {
+            const select = document.getElementById("saved-recipes-select");
+            select.innerHTML = savedRecipes.map(r =>
+                `<option value="${r.id}" ${currentRecipe && r.id === currentRecipe.id ? "selected" : ""}>${escapeHtml(r.title || "Senza Titolo")}</option>`
+            ).join("");
+        }
+
+        function saveCurrentRecipe() {
+            if (!currentRecipe.title || !currentRecipe.title.trim()) {
+                currentRecipe.title = "Nuova Ricetta Senza Titolo";
+                document.getElementById("dish-title").value = currentRecipe.title;
+            }
+            const existingIdx = savedRecipes.findIndex(r => r.id === currentRecipe.id);
+            if (existingIdx >= 0) {
+                savedRecipes[existingIdx] = deepClone(currentRecipe);
+            } else {
+                savedRecipes.unshift(deepClone(currentRecipe));
+            }
+            persistRecipesToStorage();
+            populateSavedSelect();
+            showToast(`Scheda "${currentRecipe.title}" salvata correttamente!`, "success");
+        }
+
+        function loadSelectedRecipe() {
+            const select = document.getElementById("saved-recipes-select");
+            const found = savedRecipes.find(r => r.id === select.value);
+            if (found) {
+                currentRecipe = deepClone(found);
+                renderAll();
+                showToast(`Caricata scheda: ${currentRecipe.title}`);
+            }
+        }
+
+        function createNewRecipe() {
+            const newPrepId = generateId("prep");
+            currentRecipe = {
+                id: generateId("recipe"),
+                title: "Nuovo Piatto",
+                category: "Primi Piatti",
+                portions: 1,
+                sellingPrice: 14.00,
+                vatRate: 10,
+                basePreparations: [
+                    {
+                        id: newPrepId,
+                        name: "Preparazione Base 1",
+                        manualYieldGrams: 1000,
+                        useManualYield: false,
+                        procedure: "",
+                        ingredients: [
+                            { id: generateId("ing"), name: "Ingrediente principale", grossWeight: 1000, wastePercent: 0, pricePerKg: 5.00 }
+                        ]
+                    }
+                ],
+                serviceItems: [
+                    { id: generateId("srv"), type: "prep", prepId: newPrepId, name: "", portionWeight: 120, pricePerKg: 0 }
+                ],
+                serviceProcedure: "",
+                allergens: [],
+                serviceNotes: ""
+            };
+            renderAll();
+            showToast("Creata nuova scheda vuota. Ricorda di salvarla!");
+        }
+
+        function exportJSON() {
+            const dataStr = JSON.stringify(currentRecipe, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            const safeName = (currentRecipe.title || "scheda-tecnica").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+            a.href = url;
+            a.download = `${safeName}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("File JSON esportato con successo!", "success");
+        }
+
+        function openImportModal() {
+            const modal = document.getElementById("custom-modal");
+            document.getElementById("modal-title").textContent = "Importa Scheda Tecnica (JSON)";
+            document.getElementById("modal-body").innerHTML = `
+                <p class="mb-3">Seleziona un file <strong>.json</strong> precedentemente esportato oppure incolla il codice JSON qui sotto:</p>
+                <input type="file" id="json-file-input" accept=".json" onchange="handleJsonFileUpload(event)" class="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800 mb-3">
+                <textarea id="json-paste-area" rows="5" placeholder='{"title": "...", ...}' class="w-full font-mono text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-indigo-500"></textarea>
+            `;
+            document.getElementById("modal-footer").innerHTML = `
+                <button onclick="closeModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
+                <button onclick="confirmJsonImport()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Importa Scheda</button>
+            `;
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function handleJsonFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById("json-paste-area").value = e.target.result;
+            };
+            reader.readAsText(file);
+        }
+
+        function confirmJsonImport() {
+            const raw = document.getElementById("json-paste-area").value.trim();
+            if (!raw) {
+                showToast("Inserisci o carica un file JSON valido.", "error");
+                return;
+            }
+            try {
+                const parsed = JSON.parse(raw);
+                if (!parsed.basePreparations || !parsed.serviceItems) {
+                    throw new Error("Struttura JSON non valida");
+                }
+                parsed.id = generateId("recipe");
+                currentRecipe = parsed;
+                saveCurrentRecipe();
+                renderAll();
+                closeModal();
+                showToast("Scheda importata con successo!", "success");
+            } catch (e) {
+                showToast("Errore nel formato JSON: verifica il file.", "error");
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById("custom-modal");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function downloadStandaloneHTML() {
+            const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "ChefCost_Pro_FoodCost.html";
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Applicazione HTML scaricata sul tuo dispositivo!", "success");
+        }
+
+        // =========================================================================
+        // 8. UTILITY UI (TOAST & ESCAPE HTML)
+        // =========================================================================
+        function showToast(message, type = "info") {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+
+            let colors = "bg-slate-900 text-white border-slate-700";
+            if (type === "success") colors = "bg-emerald-800 text-white border-emerald-600";
+            if (type === "warning") colors = "bg-amber-600 text-white border-amber-500";
+            if (type === "error") colors = "bg-rose-700 text-white border-rose-600";
+
+            toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl border shadow-lg text-xs font-semibold flex items-center gap-2 transition-all duration-300 transform translate-y-2 opacity-0 ${colors}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove("translate-y-2", "opacity-0");
+            });
+
+            setTimeout(() => {
+                toast.classList.add("opacity-0", "translate-y-2");
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            if (typeof str !== "string") return "";
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Avvio all'apertura della pagina
+        window.addEventListener("DOMContentLoaded", initApp);
+    </script>
+</body>
+</html>
