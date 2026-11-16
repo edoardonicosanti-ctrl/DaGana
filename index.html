@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="theme-color" content="#9c7c65">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Da Gana">
     <title>ChefCost Da Gana — Scheda Tecnica & Food Cost</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -48,6 +54,16 @@
         input[type=number] {
             -moz-appearance: textfield;
         }
+        /* Evita il doppio refresh nativo: usiamo il pull-to-refresh personalizzato */
+        html, body { overscroll-behavior-y: none; }
+        #ptr-indicator {
+            position: fixed; left: 50%; top: 0; z-index: 60;
+            width: 40px; height: 40px; margin-left: -20px;
+            display: flex; align-items: center; justify-content: center;
+            background: #fff; color: #9c7c65; border: 1px solid #e2e8f0;
+            border-radius: 9999px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
+            transform: translateY(-60px); opacity: 0; pointer-events: none;
+        }
         /* Stili specifici per stampa PDF */
         @media print {
             body {
@@ -84,6 +100,9 @@
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
+
+    <!-- Indicatore pull-to-refresh -->
+    <div id="ptr-indicator" class="no-print"><i data-lucide="refresh-cw" class="w-5 h-5"></i></div>
 
     <!-- Toast Notification Container (No alert()) -->
     <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
@@ -137,6 +156,11 @@
                     </button>
 
                     <div class="h-4 w-px bg-slate-200 mx-0.5 hidden sm:block"></div>
+
+                    <button onclick="requestReload()" title="Ricarica la pagina" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span class="hidden md:inline">Ricarica</span>
+                    </button>
 
                     <button onclick="exportJSON()" title="Esporta dati JSON" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i>
@@ -1318,6 +1342,60 @@
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
+
+        // =========================================================================
+        // RICARICA PAGINA (tasto + pull-to-refresh)
+        // =========================================================================
+        function requestReload() {
+            const modal = document.getElementById("custom-modal");
+            document.getElementById("modal-title").textContent = "Ricarica pagina";
+            document.getElementById("modal-body").innerHTML = `
+                <p>Le modifiche <strong>non salvate</strong> della scheda in uso andranno perse. Vuoi salvare prima di ricaricare?</p>`;
+            document.getElementById("modal-footer").innerHTML = `
+                <button onclick="closeModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
+                <button onclick="doReload(false)" class="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Ricarica senza salvare</button>
+                <button onclick="doReload(true)" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Salva e ricarica</button>`;
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function doReload(saveFirst) {
+            if (saveFirst) { try { saveCurrentRecipe(); } catch (e) {} }
+            window.location.reload();
+        }
+
+        (function initPullToRefresh() {
+            const ind = document.getElementById("ptr-indicator");
+            const THRESHOLD = 80;
+            let startY = 0, pulling = false, dist = 0;
+
+            window.addEventListener("touchstart", (e) => {
+                const modalOpen = !document.getElementById("custom-modal").classList.contains("hidden");
+                if (window.scrollY <= 0 && !modalOpen && e.touches.length === 1) {
+                    startY = e.touches[0].clientY; pulling = true; dist = 0;
+                }
+            }, { passive: true });
+
+            window.addEventListener("touchmove", (e) => {
+                if (!pulling) return;
+                dist = e.touches[0].clientY - startY;
+                if (dist <= 0 || window.scrollY > 0) { dist = 0; ind.style.opacity = 0; return; }
+                const d = Math.min(dist * 0.5, 90);
+                ind.style.opacity = Math.min(d / 50, 1);
+                ind.style.transform = `translateY(${d - 20}px) rotate(${d * 4}deg)`;
+            }, { passive: true });
+
+            window.addEventListener("touchend", () => {
+                if (!pulling) return;
+                pulling = false;
+                const reached = dist >= THRESHOLD * 2;
+                ind.style.transition = "transform .2s, opacity .2s";
+                ind.style.opacity = 0;
+                ind.style.transform = "translateY(-60px)";
+                setTimeout(() => { ind.style.transition = ""; }, 250);
+                if (reached) requestReload();
+            }, { passive: true });
+        })();
 
         // Avvio all'apertura della pagina
         window.addEventListener("DOMContentLoaded", initApp);
