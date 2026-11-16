@@ -3,19 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="manifest.webmanifest">
+    <title>ChefCost Da Gana — Scheda Tecnica & Food Cost</title>
+    <!-- Icona app / schermata home -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#9c7c65">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Da Gana">
-    <title>ChefCost Da Gana — Scheda Tecnica & Food Cost</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <!-- Supabase (client JS) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
@@ -54,16 +58,6 @@
         input[type=number] {
             -moz-appearance: textfield;
         }
-        /* Evita il doppio refresh nativo: usiamo il pull-to-refresh personalizzato */
-        html, body { overscroll-behavior-y: none; }
-        #ptr-indicator {
-            position: fixed; left: 50%; top: 0; z-index: 60;
-            width: 40px; height: 40px; margin-left: -20px;
-            display: flex; align-items: center; justify-content: center;
-            background: #fff; color: #9c7c65; border: 1px solid #e2e8f0;
-            border-radius: 9999px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
-            transform: translateY(-60px); opacity: 0; pointer-events: none;
-        }
         /* Stili specifici per stampa PDF */
         @media print {
             body {
@@ -100,9 +94,6 @@
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
-
-    <!-- Indicatore pull-to-refresh -->
-    <div id="ptr-indicator" class="no-print"><i data-lucide="refresh-cw" class="w-5 h-5"></i></div>
 
     <!-- Toast Notification Container (No alert()) -->
     <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
@@ -157,11 +148,6 @@
 
                     <div class="h-4 w-px bg-slate-200 mx-0.5 hidden sm:block"></div>
 
-                    <button onclick="requestReload()" title="Ricarica la pagina" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
-                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                        <span class="hidden md:inline">Ricarica</span>
-                    </button>
-
                     <button onclick="exportJSON()" title="Esporta dati JSON" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i>
                         <span class="hidden md:inline">JSON</span>
@@ -175,6 +161,16 @@
                     <button onclick="downloadStandaloneHTML()" title="Scarica questa applicazione HTML sul tuo PC" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">
                         <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
                         <span class="hidden lg:inline">Scarica App HTML</span>
+                    </button>
+
+                    <button id="cloud-btn" onclick="openAccountModal()" title="Account e sincronizzazione cloud" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                        <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+                        <span id="cloud-label" class="hidden md:inline">Cloud</span>
+                    </button>
+
+                    <button onclick="refreshApp()" title="Ricarica l'app per vedere l'ultima versione" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span class="hidden md:inline">Aggiorna</span>
                     </button>
 
                     <button onclick="window.print()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition">
@@ -489,6 +485,7 @@
             }
             populateSavedSelect();
             renderAll();
+            initSupabase();
         }
 
         function loadSavedRecipesFromStorage() {
@@ -513,6 +510,189 @@
             } catch (e) {
                 showToast("Impossibile salvare nel browser (memoria piena o bloccata).", "error");
             }
+        }
+
+        // =========================================================================
+        // 2b. SUPABASE (LOGIN + SINCRONIZZAZIONE CLOUD)
+        // =========================================================================
+        // Incolla qui i dati del tuo progetto (Supabase > Project Settings > API)
+        const SUPABASE_URL = "INCOLLA_QUI_PROJECT_URL";
+        const SUPABASE_ANON_KEY = "INCOLLA_QUI_ANON_KEY";
+        const SUPABASE_TABLE = "recipes";
+
+        let sbClient = null;
+        let sbUser = null;
+
+        function sbConfigured() {
+            return SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY.length > 20 && window.supabase;
+        }
+
+        function updateCloudButton() {
+            const btn = document.getElementById("cloud-btn");
+            const label = document.getElementById("cloud-label");
+            if (!btn) return;
+            if (!sbConfigured()) {
+                btn.style.display = "none";
+                return;
+            }
+            const on = !!sbUser;
+            btn.classList.toggle("text-emerald-700", on);
+            btn.classList.toggle("bg-emerald-50", on);
+            btn.classList.toggle("text-slate-600", !on);
+            btn.classList.toggle("bg-slate-100", !on);
+            if (label) label.textContent = on ? "Sincronizzato" : "Accedi";
+        }
+
+        async function initSupabase() {
+            updateCloudButton();
+            if (!sbConfigured()) return;
+            try {
+                sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                const { data } = await sbClient.auth.getSession();
+                if (data && data.session) {
+                    sbUser = data.session.user;
+                    updateCloudButton();
+                    await syncFromCloud(true);
+                } else {
+                    openAccountModal();
+                }
+            } catch (e) {
+                console.error("Errore Supabase:", e);
+                showToast("Cloud non raggiungibile: lavoro solo in locale.", "warning");
+            }
+        }
+
+        function recipeToRow(r) {
+            return {
+                user_id: sbUser.id,
+                id: r.id,
+                data: r,
+                updated_at: new Date(r.updatedAt || Date.now()).toISOString()
+            };
+        }
+
+        async function pushRecipesToCloud(recipes) {
+            if (!sbClient || !sbUser || recipes.length === 0) return true;
+            const { error } = await sbClient
+                .from(SUPABASE_TABLE)
+                .upsert(recipes.map(recipeToRow), { onConflict: "user_id,id" });
+            if (error) {
+                console.error("Errore upload Supabase:", error);
+                return false;
+            }
+            return true;
+        }
+
+        // Scarica le schede dal cloud e le unisce a quelle locali (vince la più recente)
+        async function syncFromCloud(replaceCurrent = false) {
+            if (!sbClient || !sbUser) return;
+            const { data, error } = await sbClient.from(SUPABASE_TABLE).select("id, data, updated_at");
+            if (error) {
+                console.error("Errore download Supabase:", error);
+                showToast("Errore di sincronizzazione: " + error.message, "error");
+                return;
+            }
+            const remoteMap = new Map();
+            (data || []).forEach(row => {
+                const r = row.data || {};
+                r.id = row.id;
+                r.updatedAt = r.updatedAt || Date.parse(row.updated_at) || 0;
+                remoteMap.set(row.id, r);
+            });
+            const localMap = new Map(savedRecipes.map(r => [r.id, r]));
+            const merged = [];
+            const toUpload = [];
+            remoteMap.forEach((r, id) => {
+                const l = localMap.get(id);
+                if (l && (l.updatedAt || 0) > (r.updatedAt || 0)) {
+                    merged.push(l);
+                    toUpload.push(l);
+                } else {
+                    merged.push(r);
+                }
+            });
+            localMap.forEach((l, id) => {
+                if (!remoteMap.has(id)) {
+                    merged.push(l);
+                    toUpload.push(l);
+                }
+            });
+            merged.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            savedRecipes = merged;
+            persistRecipesToStorage();
+
+            if (toUpload.length > 0) {
+                const ok = await pushRecipesToCloud(toUpload);
+                if (!ok) showToast("Alcune schede non sono state caricate nel cloud.", "warning");
+            }
+
+            if (replaceCurrent && savedRecipes.length > 0) {
+                currentRecipe = deepClone(savedRecipes[0]);
+                renderAll();
+            }
+            populateSavedSelect();
+            showToast("Sincronizzazione completata.", "success");
+        }
+
+        function openAccountModal() {
+            if (!sbConfigured()) return;
+            const modal = document.getElementById("custom-modal");
+            const title = document.getElementById("modal-title");
+            const body = document.getElementById("modal-body");
+            const footer = document.getElementById("modal-footer");
+            if (sbUser) {
+                title.textContent = "Account cloud";
+                body.innerHTML = `<p>Collegato come <strong>${escapeHtml(sbUser.email || "")}</strong>.<br>Le schede salvate vengono sincronizzate su tutti i tuoi dispositivi.</p>`;
+                footer.innerHTML = `
+                    <button onclick="closeModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Chiudi</button>
+                    <button onclick="closeModal(); syncFromCloud(false)" class="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg">Sincronizza ora</button>
+                    <button onclick="signOutCloud()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Esci</button>
+                `;
+            } else {
+                title.textContent = "Accedi al cloud";
+                body.innerHTML = `
+                    <p class="mb-3">Accedi per sincronizzare le schede tra PC e telefono. Puoi chiudere questa finestra per lavorare solo in locale.</p>
+                    <input type="email" id="sb-email" placeholder="Email" autocomplete="username" class="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 mb-2 focus:outline-none focus:border-indigo-500">
+                    <input type="password" id="sb-password" placeholder="Password" autocomplete="current-password" class="w-full text-sm bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-indigo-500">
+                    <p id="sb-error" class="text-xs text-rose-600 mt-2 hidden"></p>
+                `;
+                footer.innerHTML = `
+                    <button onclick="closeModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Chiudi</button>
+                    <button onclick="signInCloud()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Accedi</button>
+                `;
+            }
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        async function signInCloud() {
+            const email = document.getElementById("sb-email").value.trim();
+            const password = document.getElementById("sb-password").value;
+            const errEl = document.getElementById("sb-error");
+            errEl.classList.add("hidden");
+            if (!email || !password) {
+                errEl.textContent = "Inserisci email e password.";
+                errEl.classList.remove("hidden");
+                return;
+            }
+            const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+            if (error) {
+                errEl.textContent = "Accesso non riuscito: " + error.message;
+                errEl.classList.remove("hidden");
+                return;
+            }
+            sbUser = data.user;
+            closeModal();
+            updateCloudButton();
+            await syncFromCloud(true);
+        }
+
+        async function signOutCloud() {
+            await sbClient.auth.signOut();
+            sbUser = null;
+            closeModal();
+            updateCloudButton();
+            showToast("Disconnesso dal cloud. Le schede restano salvate su questo dispositivo.", "info");
         }
 
         // =========================================================================
@@ -1175,6 +1355,7 @@
                 currentRecipe.title = "Nuova Ricetta Senza Titolo";
                 document.getElementById("dish-title").value = currentRecipe.title;
             }
+            currentRecipe.updatedAt = Date.now();
             const existingIdx = savedRecipes.findIndex(r => r.id === currentRecipe.id);
             if (existingIdx >= 0) {
                 savedRecipes[existingIdx] = deepClone(currentRecipe);
@@ -1183,7 +1364,15 @@
             }
             persistRecipesToStorage();
             populateSavedSelect();
-            showToast(`Scheda "${currentRecipe.title}" salvata correttamente!`, "success");
+            if (sbUser) {
+                const title = currentRecipe.title;
+                pushRecipesToCloud([deepClone(currentRecipe)]).then(ok => {
+                    if (ok) showToast(`Scheda "${title}" salvata e sincronizzata!`, "success");
+                    else showToast(`Scheda "${title}" salvata solo su questo dispositivo: errore cloud.`, "warning");
+                });
+            } else {
+                showToast(`Scheda "${currentRecipe.title}" salvata correttamente!`, "success");
+            }
         }
 
         function loadSelectedRecipe() {
@@ -1307,6 +1496,14 @@
             showToast("Applicazione HTML scaricata sul tuo dispositivo!", "success");
         }
 
+        // Ricarica l'app aggirando la cache, così si vede subito l'ultima versione pubblicata
+        function refreshApp() {
+            showToast("Aggiornamento in corso…");
+            const url = new URL(window.location.href);
+            url.searchParams.set("v", Date.now());
+            setTimeout(() => window.location.replace(url.toString()), 300);
+        }
+
         // =========================================================================
         // 8. UTILITY UI (TOAST & ESCAPE HTML)
         // =========================================================================
@@ -1342,60 +1539,6 @@
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
-
-        // =========================================================================
-        // RICARICA PAGINA (tasto + pull-to-refresh)
-        // =========================================================================
-        function requestReload() {
-            const modal = document.getElementById("custom-modal");
-            document.getElementById("modal-title").textContent = "Ricarica pagina";
-            document.getElementById("modal-body").innerHTML = `
-                <p>Le modifiche <strong>non salvate</strong> della scheda in uso andranno perse. Vuoi salvare prima di ricaricare?</p>`;
-            document.getElementById("modal-footer").innerHTML = `
-                <button onclick="closeModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
-                <button onclick="doReload(false)" class="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Ricarica senza salvare</button>
-                <button onclick="doReload(true)" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Salva e ricarica</button>`;
-            modal.classList.remove("hidden");
-            modal.classList.add("flex");
-        }
-
-        function doReload(saveFirst) {
-            if (saveFirst) { try { saveCurrentRecipe(); } catch (e) {} }
-            window.location.reload();
-        }
-
-        (function initPullToRefresh() {
-            const ind = document.getElementById("ptr-indicator");
-            const THRESHOLD = 80;
-            let startY = 0, pulling = false, dist = 0;
-
-            window.addEventListener("touchstart", (e) => {
-                const modalOpen = !document.getElementById("custom-modal").classList.contains("hidden");
-                if (window.scrollY <= 0 && !modalOpen && e.touches.length === 1) {
-                    startY = e.touches[0].clientY; pulling = true; dist = 0;
-                }
-            }, { passive: true });
-
-            window.addEventListener("touchmove", (e) => {
-                if (!pulling) return;
-                dist = e.touches[0].clientY - startY;
-                if (dist <= 0 || window.scrollY > 0) { dist = 0; ind.style.opacity = 0; return; }
-                const d = Math.min(dist * 0.5, 90);
-                ind.style.opacity = Math.min(d / 50, 1);
-                ind.style.transform = `translateY(${d - 20}px) rotate(${d * 4}deg)`;
-            }, { passive: true });
-
-            window.addEventListener("touchend", () => {
-                if (!pulling) return;
-                pulling = false;
-                const reached = dist >= THRESHOLD * 2;
-                ind.style.transition = "transform .2s, opacity .2s";
-                ind.style.opacity = 0;
-                ind.style.transform = "translateY(-60px)";
-                setTimeout(() => { ind.style.transition = ""; }, 250);
-                if (reached) requestReload();
-            }, { passive: true });
-        })();
 
         // Avvio all'apertura della pagina
         window.addEventListener("DOMContentLoaded", initApp);
